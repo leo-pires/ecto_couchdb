@@ -77,6 +77,12 @@ defmodule RepoTest do
       {:ok, result} = Repo.insert(post)
       assert has_id_and_rev?(result)
     end
+
+    test "generates timestamps", %{post: post} do
+      {:ok, inserted} = Repo.insert(post)
+      assert not is_nil(inserted.inserted_at)
+      assert not is_nil(inserted.updated_at)
+    end
   end
 
   describe "insert_all" do

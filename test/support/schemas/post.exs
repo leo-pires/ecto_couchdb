@@ -10,6 +10,7 @@ defmodule Post do
     field :_rev, :string, read_after_writes: true, primary_key: true
     embeds_many :grants, Grant, on_replace: :delete
     embeds_one :stats, Stats, on_replace: :delete
+    timestamps()
 
     designs do
       design __MODULE__ do

@@ -15,7 +15,9 @@ defmodule CouchdbAdapter do
 
   @doc false
   def loaders({:embed, _} = type, _), do: [&load_embed(type, &1)]
-  def loaders(_, type),               do: [type]
+  # def loaders(:naive_datetime, type), do: [&load_datetime/1, type]
+  def loaders(_, type), do: [type]
+
 
   defp load_embed({:embed, %{related: related, cardinality: :one}}, value) do
     {:ok, struct(related, atomize_keys(value))}
@@ -24,11 +26,28 @@ defmodule CouchdbAdapter do
     {:ok, Enum.map(values, &struct(related, atomize_keys(&1)))}
   end
 
+  defp load_datetime(datetime) do
+    # naive = DateTime.to_naive(datetime)
+    # {date, {h, m, s}} = NaiveDateTime.to_erl(naive)
+    # {x, _} = naive.microsecond
+    # {:ok, {date, {h, m, s, x}}}
+    {:ok, datetime |> IO.inspect}
+  end
+
   defp atomize_keys({map}), do: atomize_keys(map)
   defp atomize_keys(map), do: for {k, v} <- map, do: {String.to_atom(k), v}
 
   @doc false
-  def dumpers(_, type),               do: [type]
+  def dumpers(:naive_datetime, type), do: [type, &dump_naive_datetime/1]
+  def dumpers(_, type), do: [type]
+
+  defp dump_naive_datetime({{_, _, _} = date, {h, m, s, ms}}) do
+    str =
+      {date, {h, m, s}}
+      |> NaiveDateTime.from_erl!({ms, 6})
+      |> NaiveDateTime.to_iso8601
+    {:ok, str}
+  end
 
   def child_spec(repo, _options) do
     :hackney_pool.child_spec(repo, pool_config(repo.config))
