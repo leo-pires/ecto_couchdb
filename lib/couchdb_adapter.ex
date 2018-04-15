@@ -31,7 +31,7 @@ defmodule CouchdbAdapter do
     # {date, {h, m, s}} = NaiveDateTime.to_erl(naive)
     # {x, _} = naive.microsecond
     # {:ok, {date, {h, m, s, x}}}
-    {:ok, datetime |> IO.inspect}
+    {:ok, datetime}
   end
 
   defp atomize_keys({map}), do: atomize_keys(map)
@@ -83,9 +83,11 @@ defmodule CouchdbAdapter do
   # - returning: list of atoms of fields whose value needs to be returned
   # - options: ??? Seems to be a Keyword.t (but the actual type is options). Arrives as [skip_transaction: true]
   def insert(repo, meta, fields, _on_conflict, returning, _options) do
+    type = db_name(meta)
+    database = repo.config[:database]
     with server <- server_for(repo),
-         {:ok, db} <- :couchbeam.open_db(server, db_name(meta)),
-         {:ok, {new_fields}} <- :couchbeam.save_doc(db, to_doc(fields))
+         {:ok, db} <- :couchbeam.open_db(server, database),
+         {:ok, {new_fields}} <- :couchbeam.save_doc(db, to_doc(fields |> inject_type(type)))
       do
         {:ok, returning(returning, new_fields)}
       else
@@ -98,9 +100,11 @@ defmodule CouchdbAdapter do
 
   @doc false
   def insert_all(repo, schema_meta, _header, list, _on_conflict, returning, _options) do
+    type = db_name(schema_meta)
+    database = repo.config[:database]
     with server <- server_for(repo),
-         {:ok, db} <- :couchbeam.open_db(server, db_name(schema_meta)),
-         {:ok, result} <- :couchbeam.save_docs(db, Enum.map(list, &to_doc(&1)))
+         {:ok, db} <- :couchbeam.open_db(server, database),
+         {:ok, result} <- :couchbeam.save_docs(db, Enum.map(list, &to_doc(&1 |> inject_type(type))))
     do
       if returning == [] do
         {length(result), nil}
@@ -217,8 +221,11 @@ defmodule CouchdbAdapter do
 
   @doc false
   def delete(repo, schema_meta, filters, _options) do
+    # TODO: implemente delete using type
+    type = db_name(schema_meta)
+    database = repo.config[:database]
     with server <- server_for(repo),
-         {:ok, db} <- :couchbeam.open_db(server, db_name(schema_meta)),
+         {:ok, db} <- :couchbeam.open_db(server, database),
          {:ok, [result]} <- :couchbeam.delete_doc(db, to_doc(filters))
     do
       {ok, result} = :couchbeam_doc.take_value("ok", result)
@@ -235,8 +242,11 @@ defmodule CouchdbAdapter do
 
   @doc false
   def execute(repo, query_meta, {_cache, query}, _params, preprocess, _options) do
+    # TODO: implement queries using type
+    type = db_name(query_meta)
+    database = repo.config[:database]
     with server <- server_for(repo),
-         {:ok, db} <- :couchbeam.open_db(server, db_name(query_meta)),
+         {:ok, db} <- :couchbeam.open_db(server, database),
          {:ok, data} <- :couchbeam_view.fetch(db, query.view, query.options)
     do
       {records, count} = Enum.map_reduce(data, 0, &{process_result(&1, preprocess, query_meta.fields), &2 + 1})
@@ -263,12 +273,15 @@ defmodule CouchdbAdapter do
   end
 
   def update(repo, schema_meta, fields, filters, returning, _options) do
+    type = db_name(schema_meta)
+    database = repo.config[:database]
     with server <- server_for(repo),
-         {:ok, db} <- :couchbeam.open_db(server, db_name(schema_meta)),
+         {:ok, db} <- :couchbeam.open_db(server, database),
          {:ok, doc} <- fetch_for_update(db, filters),
-         doc <- Enum.reduce(fields, doc, fn({key, value}, accum) ->
-                                           :couchbeam_doc.set_value(to_string(key), to_doc_value(value), accum)
-                                         end),
+         doc <- Enum.reduce(fields |> inject_type(type), doc,
+                            fn({key, value}, accum) ->
+                              :couchbeam_doc.set_value(to_string(key), to_doc_value(value), accum)
+                            end),
          {:ok, doc} <- :couchbeam.save_doc(db, doc)
     do
       fields = for field <- returning, do: {field, :couchbeam_doc.get_value(to_string(field), doc)}
@@ -293,4 +306,7 @@ defmodule CouchdbAdapter do
       {:error, reason} -> raise inspect(reason)
     end
   end
+
+  defp inject_type(fields, type) when is_map(fields), do: fields |> Map.put(:type, type)
+  defp inject_type(fields, type), do: [{:type, type} | fields]
 end

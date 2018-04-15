@@ -1,5 +1,5 @@
 defmodule DatabaseCleaner do
-  def ensure_clean_db!(repo, schema) do
+  def ensure_clean_db!(repo, _schema) do
     config = Application.get_env(:couchdb_adapter, repo)
     opts =
       if config[:user] && config[:password] do
@@ -8,11 +8,11 @@ defmodule DatabaseCleaner do
         []
       end
     server = :couchbeam.server_connection(config[:hostname], config[:port], "", opts)
-    db_name = schema.__schema__(:source)
-    if :couchbeam.db_exists(server, db_name) do
-      :couchbeam.delete_db(server, db_name)
+    database = config[:database]
+    if :couchbeam.db_exists(server, database) do
+      :couchbeam.delete_db(server, database)
     end
-    {:ok, db} = :couchbeam.create_db(server, db_name)
+    {:ok, db} = :couchbeam.create_db(server, database)
     db
   end
 end

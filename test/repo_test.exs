@@ -78,6 +78,13 @@ defmodule RepoTest do
       assert has_id_and_rev?(result)
     end
 
+    test "insert from changeset", %{} do
+      changeset = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum"})
+      {:ok, result} = Repo.insert(changeset)
+      assert has_id_and_rev?(result)
+      assert result.type == "posts"
+    end
+
     test "generates timestamps", %{post: post} do
       {:ok, inserted} = Repo.insert(post)
       assert not is_nil(inserted.inserted_at)
@@ -349,6 +356,18 @@ defmodule RepoTest do
                      |> Ecto.Changeset.change(title: "Changed title")
                      |> Repo.update
                    end)
+    end
+
+    test "insert from changeset", %{} do
+      {:ok, pc} = Repo.insert(Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum"}))
+      assert has_id_and_rev?(pc)
+      assert pc.type == "posts"
+      {:ok, pu} = Repo.update(Post.changeset(pc, %{title: "new lorem", body: "new lorem ipsum"}))
+      assert pu.title == "new lorem"
+      assert pu.body == "new lorem ipsum"
+      assert pu.type == "posts"
+      assert pc._id == pu._id
+      assert pc._rev != pu._rev
     end
   end
 
