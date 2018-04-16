@@ -447,7 +447,7 @@ defmodule RepoTest do
       assert uc.type == uq1.type
       assert uc.username == uq1.username
       assert uc.email == uq1.email
-      # assert uc.inserted_at == uq1.inserted_at
+      assert uc.inserted_at == uq1.inserted_at
       {:ok, uu} = User.changeset(uq1, %{username: "silent bob", email: "silent.bob@gmail.com"}) |> Repo.update
       uq2 = Repo.one(from u in User, where: u.all == "test-user-id")
       assert uu._id == uq1._id
@@ -457,7 +457,13 @@ defmodule RepoTest do
       assert uu.type == uq2.type
       assert uu.username == uq2.username
       assert uu.email == uq2.email
-      # assert uu.updated_at == uq2.updated_at
+      assert uu.updated_at == uq2.updated_at
+    end
+
+    test "cast_assoc" do
+      changeset = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}})
+      {:ok, inserted} = changeset |> Repo.insert
+      assert inserted.user_id == inserted.user._id
     end
   end
 end
