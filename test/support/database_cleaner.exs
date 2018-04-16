@@ -1,5 +1,5 @@
 defmodule DatabaseCleaner do
-  def ensure_clean_db!(repo, _schema) do
+  def ensure_clean_db!(repo) do
     config = Application.get_env(:couchdb_adapter, repo)
     opts =
       if config[:user] && config[:password] do

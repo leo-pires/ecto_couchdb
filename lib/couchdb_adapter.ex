@@ -15,9 +15,8 @@ defmodule CouchdbAdapter do
 
   @doc false
   def loaders({:embed, _} = type, _), do: [&load_embed(type, &1)]
-  # def loaders(:naive_datetime, type), do: [&load_datetime/1, type]
+  def loaders(:naive_datetime, type), do: [&load_datetime/1, type]
   def loaders(_, type), do: [type]
-
 
   defp load_embed({:embed, %{related: related, cardinality: :one}}, value) do
     {:ok, struct(related, atomize_keys(value))}
@@ -25,13 +24,8 @@ defmodule CouchdbAdapter do
   defp load_embed({:embed, %{related: related, cardinality: :many}}, values) do
     {:ok, Enum.map(values, &struct(related, atomize_keys(&1)))}
   end
-
   defp load_datetime(datetime) do
-    # naive = DateTime.to_naive(datetime)
-    # {date, {h, m, s}} = NaiveDateTime.to_erl(naive)
-    # {x, _} = naive.microsecond
-    # {:ok, {date, {h, m, s, x}}}
-    {:ok, datetime}
+    {:ok, NaiveDateTime.from_iso8601!(datetime) |> NaiveDateTime.to_erl}
   end
 
   defp atomize_keys({map}), do: atomize_keys(map)
@@ -42,11 +36,7 @@ defmodule CouchdbAdapter do
   def dumpers(_, type), do: [type]
 
   defp dump_naive_datetime({{_, _, _} = date, {h, m, s, ms}}) do
-    str =
-      {date, {h, m, s}}
-      |> NaiveDateTime.from_erl!({ms, 6})
-      |> NaiveDateTime.to_iso8601
-    {:ok, str}
+    {:ok, {date, {h, m, s}} |> NaiveDateTime.from_erl! |> NaiveDateTime.to_iso8601}
   end
 
   def child_spec(repo, _options) do
@@ -94,7 +84,7 @@ defmodule CouchdbAdapter do
         # Map the conflict to the format of SQL constraints
         {:error, :conflict} -> {:invalid, [unique: "#{db_name(meta)}_id_index"]}
         # other errors
-        {:error, reason} -> raise inspect(reason)
+        {:error, reason} -> raise "Error while inserting (#{inspect(reason)})"
     end
   end
 
@@ -112,7 +102,7 @@ defmodule CouchdbAdapter do
         {length(result), Enum.map(result, fn({fields}) -> returning(returning, fields) end)}
       end
     else
-      {:error, reason} -> raise inspect(reason)
+      {:error, reason} -> raise "Error while inserting all (#{inspect(reason)})"
     end
   end
 
@@ -236,7 +226,7 @@ defmodule CouchdbAdapter do
         {:invalid, [check: error]}
       end
     else
-      {:error, reason} -> raise inspect(reason)
+      {:error, reason} -> raise "Error while deleting (#{inspect(reason)})"
     end
   end
 
@@ -253,7 +243,7 @@ defmodule CouchdbAdapter do
       {count, records}
     else
       {:error, {:error, reason}} -> raise inspect(reason)
-      {:error, reason} -> raise inspect(reason)
+      {:error, reason} -> raise "Error while searching (#{inspect(reason)})"
     end
   end
 
@@ -303,7 +293,7 @@ defmodule CouchdbAdapter do
       end
     else
       {:error, :not_found} -> {:error, :stale}
-      {:error, reason} -> raise inspect(reason)
+      {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
 

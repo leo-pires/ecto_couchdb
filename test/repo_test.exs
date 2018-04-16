@@ -10,13 +10,20 @@ defmodule RepoTest do
   end
 
   setup do
-    db = DatabaseCleaner.ensure_clean_db!(Repo, Post)
-    design_doc = %{_id: "_design/Post", language: "javascript",
-                   views: %{
-                     all: %{
-                       map: "function(doc) { emit(doc._id, doc) }"
-                     }
-                  }}
+    db = DatabaseCleaner.ensure_clean_db!(Repo)
+    design_docs = [%{
+                     _id: "_design/Post", language: "javascript",
+                     views: %{
+                       all: %{
+                         map: "function(doc) { emit(doc._id, doc) }"
+                       }
+                   }}, %{
+                     _id: "_design/User", language: "javascript",
+                     views: %{
+                       all: %{
+                         map: "function(doc) { emit(doc._id, doc) }"
+                       }
+                   }}]
     docs = for i <- 1..3, do: %{_id: "id#{i}", title: "t#{i}", body: "b#{i}",
                                 stats: %{visits: i, time: 10*i},
                                 grants: [%{id: "1", user: "u#{i}.1", access: "a#{i}.1"},
@@ -26,7 +33,7 @@ defmodule RepoTest do
       post: %Post{title: "how to write and adapter", body: "Don't know yet"},
       grants: [%Grant{user: "admin", access: "all"}, %Grant{user: "other", access: "read"}],
       docs: docs,
-      design_doc: design_doc
+      design_docs: design_docs
     }
   end
 
@@ -93,9 +100,11 @@ defmodule RepoTest do
   end
 
   describe "insert_all" do
-    setup(context) do
-      :couchbeam.save_doc(context.db, CouchdbAdapter.to_doc(context.design_doc))
-      posts = Enum.map(context.docs, fn(doc) ->
+    setup(%{db: db, docs: docs, design_docs: design_docs}) do
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
+      posts = Enum.map(docs, fn(doc) ->
         %{doc |
           grants: Enum.map(doc.grants, &struct(Grant, &1)),
           stats: struct(Stats, doc.stats)
@@ -134,8 +143,10 @@ defmodule RepoTest do
   end
 
   describe "delete" do
-    setup %{docs: docs, db: db, design_doc: design_doc} do
-      {:ok, _} = :couchbeam.save_doc(db, CouchdbAdapter.to_doc(design_doc))
+    setup %{docs: docs, db: db, design_docs: design_docs} do
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
       {:ok, results} = :couchbeam.save_docs(db, Enum.map(docs, fn(doc) ->
         CouchdbAdapter.to_doc(doc)
       end))
@@ -195,8 +206,11 @@ defmodule RepoTest do
   end
 
   describe "all(Schema)" do
-    setup %{docs: docs, db: db, design_doc: design_doc} do
-      :couchbeam.save_docs(db, Enum.map([design_doc | docs], fn(doc) ->
+    setup %{docs: docs, db: db, design_docs: design_docs} do
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
+      :couchbeam.save_docs(db, Enum.map(docs, fn(doc) ->
         CouchdbAdapter.to_doc(doc)
       end))
       :ok
@@ -238,8 +252,11 @@ defmodule RepoTest do
   describe "all(Ecto.Query)" do
     import Ecto.Query
 
-    setup %{docs: docs, db: db, design_doc: design_doc} do
-      :couchbeam.save_docs(db, Enum.map([design_doc | docs], fn(doc) ->
+    setup %{docs: docs, db: db, design_docs: design_docs} do
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
+      :couchbeam.save_docs(db, Enum.map(docs, fn(doc) ->
         CouchdbAdapter.to_doc(doc)
       end))
       :ok
@@ -406,6 +423,41 @@ defmodule RepoTest do
       assert_raise RuntimeError, ~r/Unsupported operation.*delete_all/, fn ->
         Repo.delete_all(from p in Post, where: p.all > "id2")
       end
+    end
+  end
+
+  describe "integration tests" do
+    import Ecto.Query
+
+    setup %{db: db, design_docs: design_docs} do
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
+      :ok
+    end
+
+    test "insert with changeset, get and update" do
+      {:ok, uc} = User.changeset(%User{}, %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}) |> Repo.insert
+      assert uc._id == "test-user-id"
+      assert uc._rev
+      assert uc.type == "users"
+      uq1 = Repo.one(from p in User, where: p.all == "test-user-id")
+      assert uc._id == uq1._id
+      assert uc._rev == uq1._rev
+      assert uc.type == uq1.type
+      assert uc.username == uq1.username
+      assert uc.email == uq1.email
+      # assert uc.inserted_at == uq1.inserted_at
+      {:ok, uu} = User.changeset(uq1, %{username: "silent bob", email: "silent.bob@gmail.com"}) |> Repo.update
+      uq2 = Repo.one(from p in User, where: p.all == "test-user-id")
+      assert uu._id == uq1._id
+      assert uu._rev != uq1._rev
+      assert uu._id == uq2._id
+      assert uu._rev == uq2._rev
+      assert uu.type == uq2.type
+      assert uu.username == uq2.username
+      assert uu.email == uq2.email
+      # assert pc.updated_at == pq.updated_at
     end
   end
 end
