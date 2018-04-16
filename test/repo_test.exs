@@ -89,7 +89,7 @@ defmodule RepoTest do
       changeset = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum"})
       {:ok, result} = Repo.insert(changeset)
       assert has_id_and_rev?(result)
-      assert result.type == "posts"
+      assert result.type == "Post"
     end
 
     test "generates timestamps", %{post: post} do
@@ -378,11 +378,11 @@ defmodule RepoTest do
     test "insert from changeset", %{} do
       {:ok, pc} = Repo.insert(Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum"}))
       assert has_id_and_rev?(pc)
-      assert pc.type == "posts"
+      assert pc.type == "Post"
       {:ok, pu} = Repo.update(Post.changeset(pc, %{title: "new lorem", body: "new lorem ipsum"}))
       assert pu.title == "new lorem"
       assert pu.body == "new lorem ipsum"
-      assert pu.type == "posts"
+      assert pu.type == "Post"
       assert pc._id == pu._id
       assert pc._rev != pu._rev
     end
@@ -440,8 +440,8 @@ defmodule RepoTest do
       {:ok, uc} = User.changeset(%User{}, %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}) |> Repo.insert
       assert uc._id == "test-user-id"
       assert uc._rev
-      assert uc.type == "users"
-      uq1 = Repo.one(from p in User, where: p.all == "test-user-id")
+      assert uc.type == "User"
+      uq1 = Repo.one(from u in User, where: u.all == "test-user-id")
       assert uc._id == uq1._id
       assert uc._rev == uq1._rev
       assert uc.type == uq1.type
@@ -449,7 +449,7 @@ defmodule RepoTest do
       assert uc.email == uq1.email
       # assert uc.inserted_at == uq1.inserted_at
       {:ok, uu} = User.changeset(uq1, %{username: "silent bob", email: "silent.bob@gmail.com"}) |> Repo.update
-      uq2 = Repo.one(from p in User, where: p.all == "test-user-id")
+      uq2 = Repo.one(from u in User, where: u.all == "test-user-id")
       assert uu._id == uq1._id
       assert uu._rev != uq1._rev
       assert uu._id == uq2._id
@@ -457,7 +457,7 @@ defmodule RepoTest do
       assert uu.type == uq2.type
       assert uu.username == uq2.username
       assert uu.email == uq2.email
-      # assert pc.updated_at == pq.updated_at
+      # assert uu.updated_at == uq2.updated_at
     end
   end
 end

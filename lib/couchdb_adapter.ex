@@ -36,7 +36,7 @@ defmodule CouchdbAdapter do
   def dumpers(_, type), do: [type]
 
   defp dump_naive_datetime({{_, _, _} = date, {h, m, s, ms}}) do
-    {:ok, {date, {h, m, s}} |> NaiveDateTime.from_erl! |> NaiveDateTime.to_iso8601}
+    {:ok, {date, {h, m, s}} |> NaiveDateTime.from_erl!({ms, 6}) |> NaiveDateTime.to_iso8601}
   end
 
   def child_spec(repo, _options) do
@@ -73,7 +73,7 @@ defmodule CouchdbAdapter do
   # - returning: list of atoms of fields whose value needs to be returned
   # - options: ??? Seems to be a Keyword.t (but the actual type is options). Arrives as [skip_transaction: true]
   def insert(repo, meta, fields, _on_conflict, returning, _options) do
-    type = db_name(meta)
+    type = db_name2(meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -90,7 +90,7 @@ defmodule CouchdbAdapter do
 
   @doc false
   def insert_all(repo, schema_meta, _header, list, _on_conflict, returning, _options) do
-    type = db_name(schema_meta)
+    type = db_name2(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -109,6 +109,8 @@ defmodule CouchdbAdapter do
   @spec db_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
   defp db_name(%{schema: schema}), do: schema.__schema__(:source)
   defp db_name(%{sources: {{db_name, _}}}), do: db_name
+  defp db_name2(%{schema: schema}), do: schema |> Module.split |> Enum.join(".")
+  defp db_name2(%{sources: {{db_name, _}}}), do: db_name
 
   @spec to_doc(Keyword.t | map) :: {[{String.t, any}]}
   def to_doc(fields) do
@@ -212,7 +214,7 @@ defmodule CouchdbAdapter do
   @doc false
   def delete(repo, schema_meta, filters, _options) do
     # TODO: implemente delete using type
-    type = db_name(schema_meta)
+    type = db_name2(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -233,7 +235,7 @@ defmodule CouchdbAdapter do
   @doc false
   def execute(repo, query_meta, {_cache, query}, _params, preprocess, _options) do
     # TODO: implement queries using type
-    type = db_name(query_meta)
+    type = db_name2(query_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -263,7 +265,7 @@ defmodule CouchdbAdapter do
   end
 
   def update(repo, schema_meta, fields, filters, returning, _options) do
-    type = db_name(schema_meta)
+    type = db_name2(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),

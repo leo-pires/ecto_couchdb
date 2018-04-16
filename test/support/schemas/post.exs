@@ -9,6 +9,7 @@ defmodule Post do
     field :type, :string, read_after_writes: true
     field :title, :string
     field :body, :string
+    belongs_to :user, User
     embeds_many :grants, Grant, on_replace: :delete
     embeds_one :stats, Stats, on_replace: :delete
     timestamps()
