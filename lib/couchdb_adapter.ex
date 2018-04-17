@@ -213,9 +213,7 @@ defmodule CouchdbAdapter do
   end
 
   @doc false
-  def delete(repo, schema_meta, filters, _options) do
-    # TODO: implemente delete using type
-    type = db_name2(schema_meta)
+  def delete(repo, _schema_meta, filters, _options) do
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -300,16 +298,25 @@ defmodule CouchdbAdapter do
     end
   end
 
+  # Audo modifications
+
   defp inject_type(fields, type) when is_map(fields), do: fields |> Map.put(:type, type)
   defp inject_type(fields, type), do: [{:type, type} | fields]
 
-  def get(repo, schema, view_name, key) do
-    result = fetch_all(repo, schema, view_name, key: key)
-    case result do
-      [] -> nil
-      _ -> hd(result)
+  def get(repo, schema, id, options \\ []) do
+    database = repo.config[:database]
+    preloads_fields = infer_preloads_fields(schema, options |> Keyword.get(:preload, []))
+    with server <- server_for(repo),
+         {:ok, db} <- :couchbeam.open_db(server, database),
+         {:ok, doc} <- :couchbeam.open_doc(db, id)
+    do
+      Kernel.struct(schema, cb_process_doc(doc, schema) |> inject_preloads(repo, preloads_fields))
+    else
+      {:error, :not_found} -> nil
+      {:error, {:error, reason}} -> raise inspect(reason)
     end
   end
+
   def fetch_all(repo, schema, view_name, options \\ []) do
     type = db_name2(schema)
     view_name = view_name |> Atom.to_string
@@ -324,23 +331,22 @@ defmodule CouchdbAdapter do
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
+
   defp cb_process_result(rows, schema) do
     rows
     |> Enum.map(fn ({[{"id", _id}, {"key", _key}, {"value", fields}]}) ->
-         cb_process_doc(fields, schema)
+         Kernel.struct(schema, cb_process_doc(fields, schema))
        end)
   end
   defp cb_process_doc({fields}, schema) do
-    data =
-      fields
-      |> Enum.reduce([], fn ({field_str, raw_value}, acc) ->
-           field = field_str |> String.to_atom
-           type = schema.__schema__(:type, field)
-           value = cb_process_cast(type, raw_value)
-           [{field, value} | acc]
-         end)
-      |> Map.new
-    Kernel.struct(schema, data)
+    fields
+    |> Enum.reduce([], fn ({field_str, raw_value}, acc) ->
+         field = field_str |> String.to_atom
+         type = schema.__schema__(:type, field)
+         value = cb_process_cast(type, raw_value)
+         [{field, value} | acc]
+       end)
+    |> Map.new
   end
   defp cb_process_cast({:embed, schema}, rows) when is_list(rows) do
     rows |> Enum.map(&(cb_process_doc(&1, schema.related)))
@@ -356,4 +362,27 @@ defmodule CouchdbAdapter do
     result
   end
 
+  defp infer_preloads_fields(schema, preloads) when is_list(preloads) do
+    preloads
+    |> Enum.map(fn (preload) ->
+      case schema.__schema__(:association, preload) do
+        %Ecto.Association.BelongsTo{owner_key: fk, related: schema, field: assoc} ->
+          {fk, schema, assoc}
+        _ ->
+          raise "Unsupported preload (#{preload})!"
+      end
+    end)
+    |> Enum.uniq
+  end
+  defp infer_preloads_fields(schema, preload) when not is_list(preload), do: infer_preloads_fields(schema, [preload])
+
+  def inject_preloads(doc, repo, preloads_fields) do
+    data =
+      preloads_fields
+      |> Enum.reduce([], fn ({fk, schema, assoc}, acc) ->
+           [{assoc, get(repo, schema, Map.get(doc, fk))} | acc]
+         end)
+      |> Map.new
+    Map.merge(data, doc)
+  end
 end
