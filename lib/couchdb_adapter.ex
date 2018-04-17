@@ -109,8 +109,9 @@ defmodule CouchdbAdapter do
   @spec db_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
   defp db_name(%{schema: schema}), do: schema.__schema__(:source)
   defp db_name(%{sources: {{db_name, _}}}), do: db_name
-  defp db_name2(%{schema: schema}), do: schema |> Module.split |> Enum.join(".")
+  defp db_name2(%{schema: schema}), do: db_name2(schema)
   defp db_name2(%{sources: {{db_name, _}}}), do: db_name
+  defp db_name2(module), do: module |> Module.split |> Enum.join(".")
 
   @spec to_doc(Keyword.t | map) :: {[{String.t, any}]}
   def to_doc(fields) do
@@ -301,4 +302,58 @@ defmodule CouchdbAdapter do
 
   defp inject_type(fields, type) when is_map(fields), do: fields |> Map.put(:type, type)
   defp inject_type(fields, type), do: [{:type, type} | fields]
+
+  def get(repo, schema, view_name, key) do
+    result = fetch_all(repo, schema, view_name, key: key)
+    case result do
+      [] -> nil
+      _ -> hd(result)
+    end
+  end
+  def fetch_all(repo, schema, view_name, options \\ []) do
+    type = db_name2(schema)
+    view_name = view_name |> Atom.to_string
+    database = repo.config[:database]
+    with server <- server_for(repo),
+         {:ok, db} <- :couchbeam.open_db(server, database),
+         {:ok, data} <- :couchbeam_view.fetch(db, {type, view_name}, options)
+    do
+      data |> cb_process_result(schema)
+    else
+      {:error, {:error, reason}} -> raise inspect(reason)
+      {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
+    end
+  end
+  defp cb_process_result(rows, schema) do
+    rows
+    |> Enum.map(fn ({[{"id", _id}, {"key", _key}, {"value", fields}]}) ->
+         cb_process_doc(fields, schema)
+       end)
+  end
+  defp cb_process_doc({fields}, schema) do
+    data =
+      fields
+      |> Enum.reduce([], fn ({field_str, raw_value}, acc) ->
+           field = field_str |> String.to_atom
+           type = schema.__schema__(:type, field)
+           value = cb_process_cast(type, raw_value)
+           [{field, value} | acc]
+         end)
+      |> Map.new
+    Kernel.struct(schema, data)
+  end
+  defp cb_process_cast({:embed, schema}, rows) when is_list(rows) do
+    rows |> Enum.map(&(cb_process_doc(&1, schema.related)))
+  end
+  defp cb_process_cast({:embed, schema}, row) do
+    row |> cb_process_doc(schema.related)
+  end
+  defp cb_process_cast(_type, :null) do
+    nil
+  end
+  defp cb_process_cast(type, value) do
+    {:ok, result} = Ecto.Type.cast(type, value)
+    result
+  end
+
 end

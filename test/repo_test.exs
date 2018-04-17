@@ -15,16 +15,16 @@ defmodule RepoTest do
                      _id: "_design/Post", language: "javascript",
                      views: %{
                        all: %{
-                         map: "function(doc) { emit(doc._id, doc) }"
+                         map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
                        }
                    }}, %{
                      _id: "_design/User", language: "javascript",
                      views: %{
                        all: %{
-                         map: "function(doc) { emit(doc._id, doc) }"
+                         map: "function(doc) { if (doc.type === 'User') emit(doc._id, doc) }"
                        }
                    }}]
-    docs = for i <- 1..3, do: %{_id: "id#{i}", title: "t#{i}", body: "b#{i}",
+    docs = for i <- 1..3, do: %{_id: "id#{i}", title: "t#{i}", body: "b#{i}", type: "Post",
                                 stats: %{visits: i, time: 10*i},
                                 grants: [%{id: "1", user: "u#{i}.1", access: "a#{i}.1"},
                                          %{id: "2", user: "u#{i}.2", access: "a#{i}.2"}]}
@@ -83,13 +83,6 @@ defmodule RepoTest do
       post = struct(post, stats: %Stats{visits: 12, time: 892})
       {:ok, result} = Repo.insert(post)
       assert has_id_and_rev?(result)
-    end
-
-    test "insert from changeset", %{} do
-      changeset = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum"})
-      {:ok, result} = Repo.insert(changeset)
-      assert has_id_and_rev?(result)
-      assert result.type == "Post"
     end
 
     test "generates timestamps", %{post: post} do
@@ -374,18 +367,6 @@ defmodule RepoTest do
                      |> Repo.update
                    end)
     end
-
-    test "insert from changeset", %{} do
-      {:ok, pc} = Repo.insert(Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum"}))
-      assert has_id_and_rev?(pc)
-      assert pc.type == "Post"
-      {:ok, pu} = Repo.update(Post.changeset(pc, %{title: "new lorem", body: "new lorem ipsum"}))
-      assert pu.title == "new lorem"
-      assert pu.body == "new lorem ipsum"
-      assert pu.type == "Post"
-      assert pc._id == pu._id
-      assert pc._rev != pu._rev
-    end
   end
 
   describe "invalid queries" do
@@ -426,7 +407,7 @@ defmodule RepoTest do
     end
   end
 
-  describe "integration tests" do
+  describe "changeset" do
     import Ecto.Query
 
     setup %{db: db, design_docs: design_docs} do
@@ -436,7 +417,7 @@ defmodule RepoTest do
       :ok
     end
 
-    test "insert with changeset, get and update" do
+    test "insert and update from changeset", %{} do
       {:ok, uc} = User.changeset(%User{}, %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}) |> Repo.insert
       assert uc._id == "test-user-id"
       assert uc._rev
@@ -466,4 +447,76 @@ defmodule RepoTest do
       assert inserted.user_id == inserted.user._id
     end
   end
+
+  describe "integration tests" do
+    import Ecto.Query
+
+    setup %{docs: docs, db: db, design_docs: design_docs} do
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
+      :couchbeam.save_docs(db, Enum.map(docs, fn(doc) ->
+        CouchdbAdapter.to_doc(doc)
+      end))
+      Repo.insert! %User{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}
+      :ok
+    end
+
+    test "get return nil if not found" do
+      assert is_nil(CouchdbAdapter.get(Repo, Post, :all, "xpto"))
+    end
+
+    test "fetch all" do
+      assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 3
+      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
+    end
+
+    test "fetch all by key" do
+      u = CouchdbAdapter.fetch_all(Repo, User, :all, key: "test-user-id") |> hd
+      assert u._id == "test-user-id"
+      assert not is_nil(u._rev)
+      assert u.username == "bob"
+      assert u.email == "bob@gmail.com"
+    end
+
+    test "update from fetch all" do
+      pc = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id2", username: "alice", password: "alice@gmail.com"}}) |> Repo.insert!
+      assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
+      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
+      pf = CouchdbAdapter.get(Repo, Post, :all, pc._id)
+      assert not is_nil(pf)
+      Repo.update! Post.changeset(pf, %{title: "new lorem", body: "new lorem ipsum"})
+      pu = CouchdbAdapter.get(Repo, Post, :all, pc._id)
+      assert pu._id == pf._id
+      assert pu._rev != pf._rev
+      assert pu.title == "new lorem"
+      assert pu.body == "new lorem ipsum"
+      assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
+      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
+    end
+
+    test "update including association from fetch all" do
+      pc = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id3", username: "john", password: "john@gmail.com"}}) |> Repo.insert!
+      assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
+      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
+      pf1 = CouchdbAdapter.get(Repo, Post, :all, pc._id)
+      assert not is_nil(pf1)
+      assert pf1.user_id == pc.user._id
+      assert pf1._rev == pc._rev
+      Repo.update! Post.changeset(pf1, %{title: "new lorem", body: "new lorem ipsum", user: %{_id: "test-user-id3", username: "doe", email: "doe@gmail.com"}})
+      pf2 = CouchdbAdapter.get(Repo, Post, :all, pc._id)
+      assert pf2.user_id == pc.user._id
+      assert pf2._rev != pc._rev
+      assert pf2.title == "new lorem"
+      assert pf2.body == "new lorem ipsum"
+      uf2 = CouchdbAdapter.get(Repo, User, :all, pc.user._id)
+      assert uf2._id == pc.user._id
+      assert uf2._rev != pf2._rev
+      assert uf2.username == "doe"
+      assert uf2.email == "doe@gmail.com"
+      assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
+      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
+    end
+  end
+
 end
