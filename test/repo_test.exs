@@ -475,56 +475,90 @@ defmodule RepoTest do
 
     defmodule D do
       use Ecto.Schema
+      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
-      schema "C" do
+      schema "D" do
         field :_id, :binary_id, autogenerate: true, primary_key: true
         field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
         field :title, :string
-        belongs_to :d, D, references: :_id
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:title])
       end
     end
     defmodule C do
       use Ecto.Schema
+      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "C" do
         field :_id, :binary_id, autogenerate: true, primary_key: true
         field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
         field :title, :string
         belongs_to :d, D, references: :_id
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:title]) |> Ecto.Changeset.cast_assoc(:d)
       end
     end
     defmodule B do
       use Ecto.Schema
+      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "B" do
         field :_id, :binary_id, autogenerate: true, primary_key: true
         field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
         field :title, :string
         belongs_to :c, C, references: :_id
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:title]) |> Ecto.Changeset.cast_assoc(:c)
       end
     end
     defmodule A do
       use Ecto.Schema
+      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "A" do
         field :_id, :binary_id, autogenerate: true, primary_key: true
         field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
         field :title, :string
         belongs_to :b, B, references: :_id
       end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:title]) |> Ecto.Changeset.cast_assoc(:b)
+      end
+    end
+
+    test "normalize_preloads" do
+      assert CouchdbAdapter.normalize_preloads(:b) == [b: []]
+      assert CouchdbAdapter.normalize_preloads([:b]) == [b: []]
+      assert CouchdbAdapter.normalize_preloads([b: [c: :d]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.normalize_preloads([b: [:c, :d]]) == [b: [c: [], d: []]]
+      assert CouchdbAdapter.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.normalize_preloads([b: [c: [:d, :e]]]) == [b: [c: [d: [], e: []]]]
+      assert CouchdbAdapter.normalize_preloads([b: [c: [:d, :e]], f: :g]) == [b: [c: [d: [], e: []]], f: [g: []]]
     end
 
     test "get chaining" do
-      # pc = Repo.insert! %A{title: "a", b: %B{title: "b", c: %C{title: "c", d: %D{title: "D"}}}}
-      # a = CouchdbAdapter.get(Repo, A, key: pc._id, preload: [b: [c: :d]])
-      # assert a.title == 'a'
-      # assert a.b.title == 'b'
-      # assert a.b.c.title == 'b'
-      # assert a.b.c.d.title == 'b'
+      pc = Repo.insert! A.changeset(%A{}, %{title: "a", b: %{title: "b", c: %{title: "c", d: %{title: "d"}}}})
+      a1 = CouchdbAdapter.get(Repo, A, pc._id, preload: [b: :c])
+      assert a1.title == "a"
+      assert a1.b.title == "b"
+      assert a1.b.c.title == "c"
+      a2 = CouchdbAdapter.get(Repo, A, pc._id, preload: [b: [c: :d]])
+      assert a2.title == "a"
+      assert a2.b.title == "b"
+      assert a2.b.c.title == "c"
+      assert a2.b.c.d.title == "d"
     end
   end
 
