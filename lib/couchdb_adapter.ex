@@ -315,7 +315,7 @@ defmodule CouchdbAdapter do
     end
   end
 
-  def fetch_one(repo, schema, view_name, options \\ []) do
+  def fetch_one(repo, schema, view_name, options) do
     case fetch_all(repo, schema, view_name, options) do
       {:error, error} -> {:error, error}
       data when length(data) == 1 -> hd(data)
