@@ -428,6 +428,16 @@ defmodule RepoTest do
       assert u.email == "bob@gmail.com"
     end
 
+    test "get by key and preload" do
+      pc = Repo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
+      pf = CouchdbAdapter.get(Repo, Post, pc._id, preload: :user)
+      assert pf.title == "lorem"
+      assert pf.body == "lorem ipsum"
+      assert pf.user._id == "test-user-id1"
+      assert pf.user.username == "john"
+      assert pf.user.email == "john@gmail.com"
+    end
+
     test "get return nil if not found" do
       assert is_nil(CouchdbAdapter.get(Repo, Post, "xpto"))
     end
@@ -448,9 +458,73 @@ defmodule RepoTest do
       assert_raise RuntimeError, fn -> CouchdbAdapter.fetch_one(Repo, Post, :all) end
     end
 
+    test "fetch_one and preload" do
+      pc = Repo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
+      pf = CouchdbAdapter.fetch_one(Repo, Post, :all, key: pc._id, preload: :user)
+      assert pf.title == "lorem"
+      assert pf.body == "lorem ipsum"
+      assert pf.user._id == "test-user-id1"
+      assert pf.user.username == "john"
+      assert pf.user.email == "john@gmail.com"
+    end
+
     test "fetch all" do
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 3
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
+    end
+
+    defmodule D do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "C" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :title, :string
+        belongs_to :d, D, references: :_id
+      end
+    end
+    defmodule C do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "C" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :title, :string
+        belongs_to :d, D, references: :_id
+      end
+    end
+    defmodule B do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "B" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :title, :string
+        belongs_to :c, C, references: :_id
+      end
+    end
+    defmodule A do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "A" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :title, :string
+        belongs_to :b, B, references: :_id
+      end
+    end
+
+    test "get chaining" do
+      # pc = Repo.insert! %A{title: "a", b: %B{title: "b", c: %C{title: "c", d: %D{title: "D"}}}}
+      # a = CouchdbAdapter.get(Repo, A, key: pc._id, preload: [b: [c: :d]])
+      # assert a.title == 'a'
+      # assert a.b.title == 'b'
+      # assert a.b.c.title == 'b'
+      # assert a.b.c.d.title == 'b'
     end
   end
 

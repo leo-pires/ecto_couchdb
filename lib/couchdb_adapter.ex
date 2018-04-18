@@ -327,21 +327,22 @@ defmodule CouchdbAdapter do
     type = db_name(schema)
     view_name = view_name |> Atom.to_string
     database = repo.config[:database]
+    preloads_fields = infer_preloads_fields(schema, options |> Keyword.get(:preload, []))
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
-         {:ok, data} <- :couchbeam_view.fetch(db, {type, view_name}, options)
+         {:ok, data} <- :couchbeam_view.fetch(db, {type, view_name}, options |> Keyword.delete(:preload))
     do
-      data |> cb_process_result(schema)
+      data |> cb_process_result(schema, repo, preloads_fields)
     else
       {:error, {:error, reason}} -> raise inspect(reason)
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
 
-  defp cb_process_result(rows, schema) do
+  defp cb_process_result(rows, schema, repo, preloads_fields) do
     rows
     |> Enum.map(fn ({[{"id", _id}, {"key", _key}, {"value", fields}]}) ->
-         Kernel.struct(schema, cb_process_doc(fields, schema))
+         Kernel.struct(schema, cb_process_doc(fields, schema) |> inject_preloads(repo, preloads_fields))
        end)
   end
   defp cb_process_doc({fields}, schema) do
