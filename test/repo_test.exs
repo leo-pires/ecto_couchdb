@@ -432,6 +432,22 @@ defmodule RepoTest do
       assert is_nil(CouchdbAdapter.get(Repo, Post, "xpto"))
     end
 
+    test "fetch one returns struct" do
+      u = CouchdbAdapter.fetch_one(Repo, User, :all, key: "test-user-id0")
+      assert u._id == "test-user-id0"
+      assert not is_nil(u._rev)
+      assert u.username == "bob"
+      assert u.email == "bob@gmail.com"
+    end
+
+    test "fetch one returns nil if not found" do
+      assert is_nil(CouchdbAdapter.fetch_one(Repo, User, :all, key: "xpto"))
+    end
+
+    test "fetch one raise if more than one found" do
+      assert_raise RuntimeError, fn -> CouchdbAdapter.fetch_one(Repo, Post, :all) end
+    end
+
     test "fetch all" do
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 3
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1

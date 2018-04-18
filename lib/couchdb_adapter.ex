@@ -315,6 +315,14 @@ defmodule CouchdbAdapter do
     end
   end
 
+  def fetch_one(repo, schema, view_name, options \\ []) do
+    case fetch_all(repo, schema, view_name, options) do
+      {:error, error} -> {:error, error}
+      data when length(data) == 1 -> hd(data)
+      data when length(data) == 0 -> nil
+      _ -> raise "Fetch returning more than one value"
+    end
+  end
   def fetch_all(repo, schema, view_name, options \\ []) do
     type = db_name(schema)
     view_name = view_name |> Atom.to_string
