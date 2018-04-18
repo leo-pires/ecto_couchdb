@@ -53,13 +53,14 @@ defmodule RepoTest do
       {:ok, result} = Repo.insert(post)
       assert has_id_and_rev?(result)
       assert result._id == "FOO"
+      assert result.type == "Post"
     end
 
     test "fails if using the same id twice", %{post: post} do
       post = struct(post, _id: "FOO")
       assert {:ok, _} = Repo.insert(post)
       exception = assert_raise Ecto.ConstraintError, fn -> Repo.insert(post) end
-      assert exception.constraint == "posts_id_index"
+      assert exception.constraint == "Post_id_index"
     end
 
     test "handles conflicts as changeset errors using unique_constraint", %{post: post} do

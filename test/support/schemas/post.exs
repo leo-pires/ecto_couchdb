@@ -4,7 +4,7 @@ defmodule Post do
 
   @primary_key false
   @foreign_key_type :binary_id
-  schema "posts" do
+  schema "Post" do
     field :_id, :binary_id, autogenerate: true, primary_key: true
     field :_rev, :string, read_after_writes: true, primary_key: true
     field :type, :string, read_after_writes: true

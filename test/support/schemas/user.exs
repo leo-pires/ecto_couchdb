@@ -3,7 +3,7 @@ defmodule User do
   use Couchdb.Design
 
   @primary_key false
-  schema "users" do
+  schema "User" do
     field :_id, :binary_id, primary_key: true, autogenerate: false
     field :_rev, :string, primary_key: true, read_after_writes: true
     field :type, :string, read_after_writes: true

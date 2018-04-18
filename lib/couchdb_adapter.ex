@@ -73,7 +73,7 @@ defmodule CouchdbAdapter do
   # - returning: list of atoms of fields whose value needs to be returned
   # - options: ??? Seems to be a Keyword.t (but the actual type is options). Arrives as [skip_transaction: true]
   def insert(repo, meta, fields, _on_conflict, returning, _options) do
-    type = db_name2(meta)
+    type = db_name(meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -90,7 +90,7 @@ defmodule CouchdbAdapter do
 
   @doc false
   def insert_all(repo, schema_meta, _header, list, _on_conflict, returning, _options) do
-    type = db_name2(schema_meta)
+    type = db_name(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -109,9 +109,7 @@ defmodule CouchdbAdapter do
   @spec db_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
   defp db_name(%{schema: schema}), do: schema.__schema__(:source)
   defp db_name(%{sources: {{db_name, _}}}), do: db_name
-  defp db_name2(%{schema: schema}), do: db_name2(schema)
-  defp db_name2(%{sources: {{db_name, _}}}), do: db_name
-  defp db_name2(module), do: module |> Module.split |> Enum.join(".")
+  defp db_name(module), do: module.__schema__(:source) |> IO.inspect
 
   @spec to_doc(Keyword.t | map) :: {[{String.t, any}]}
   def to_doc(fields) do
@@ -234,7 +232,7 @@ defmodule CouchdbAdapter do
   @doc false
   def execute(repo, query_meta, {_cache, query}, _params, preprocess, _options) do
     # TODO: implement queries using type
-    type = db_name2(query_meta)
+    type = db_name(query_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -264,7 +262,7 @@ defmodule CouchdbAdapter do
   end
 
   def update(repo, schema_meta, fields, filters, returning, _options) do
-    type = db_name2(schema_meta)
+    type = db_name(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -318,7 +316,7 @@ defmodule CouchdbAdapter do
   end
 
   def fetch_all(repo, schema, view_name, options \\ []) do
-    type = db_name2(schema)
+    type = db_name(schema)
     view_name = view_name |> Atom.to_string
     database = repo.config[:database]
     with server <- server_for(repo),
