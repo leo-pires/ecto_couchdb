@@ -109,7 +109,7 @@ defmodule CouchdbAdapter do
   @spec db_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
   defp db_name(%{schema: schema}), do: schema.__schema__(:source)
   defp db_name(%{sources: {{db_name, _}}}), do: db_name
-  defp db_name(module), do: module.__schema__(:source) |> IO.inspect
+  defp db_name(module), do: module.__schema__(:source)
 
   @spec to_doc(Keyword.t | map) :: {[{String.t, any}]}
   def to_doc(fields) do
