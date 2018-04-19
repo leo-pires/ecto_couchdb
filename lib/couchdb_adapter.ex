@@ -16,28 +16,30 @@ defmodule CouchdbAdapter do
   @doc false
   def loaders({:embed, _} = type, _), do: [&load_embed(type, &1)]
   def loaders(:naive_datetime, type), do: [&load_datetime/1, type]
+  def loaders(:date, type), do: [&load_date/1, type]
+  def loaders(:time, type), do: [&load_time/1, type]
   def loaders(_, type), do: [type]
-
   defp load_embed({:embed, %{related: related, cardinality: :one}}, value) do
     {:ok, struct(related, atomize_keys(value))}
   end
   defp load_embed({:embed, %{related: related, cardinality: :many}}, values) do
     {:ok, Enum.map(values, &struct(related, atomize_keys(&1)))}
   end
-  defp load_datetime(datetime) do
-    {:ok, NaiveDateTime.from_iso8601!(datetime) |> NaiveDateTime.to_erl}
-  end
+  defp load_datetime(datetime), do: {:ok, NaiveDateTime.from_iso8601!(datetime) |> NaiveDateTime.to_erl}
+  defp load_date(date), do: date |> Date.from_iso8601
+  defp load_time(time), do: time |> Time.from_iso8601
 
   defp atomize_keys({map}), do: atomize_keys(map)
   defp atomize_keys(map), do: for {k, v} <- map, do: {String.to_atom(k), v}
 
   @doc false
   def dumpers(:naive_datetime, type), do: [type, &dump_naive_datetime/1]
+  def dumpers(:date, type), do: [type, &dump_date/1]
+  def dumpers(:time, type), do: [type, &dump_time/1]
   def dumpers(_, type), do: [type]
-
-  defp dump_naive_datetime({{_, _, _} = date, {h, m, s, ms}}) do
-    {:ok, {date, {h, m, s}} |> NaiveDateTime.from_erl!({ms, 6}) |> NaiveDateTime.to_iso8601}
-  end
+  defp dump_naive_datetime({{_, _, _} = dt, {h, m, s, ms}}), do: {:ok, {dt, {h, m, s}} |> NaiveDateTime.from_erl!({ms, 6}) |> NaiveDateTime.to_iso8601}
+  defp dump_date(date), do: {:ok, date |> Date.from_erl! |> Date.to_iso8601}
+  defp dump_time({h, m, s, ms}), do: {:ok, {h, m, s} |> Time.from_erl!({ms, 0}) |> Time.to_iso8601}
 
   def child_spec(repo, _options) do
     :hackney_pool.child_spec(repo, pool_config(repo.config))
@@ -315,7 +317,7 @@ defmodule CouchdbAdapter do
     end
   end
 
-  def fetch_one(repo, schema, view_name, options) do
+  def fetch_one(repo, schema, view_name, options \\ []) do
     case fetch_all(repo, schema, view_name, options) do
       {:error, error} -> {:error, error}
       data when length(data) == 1 -> hd(data)

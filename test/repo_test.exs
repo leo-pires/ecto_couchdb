@@ -621,6 +621,20 @@ defmodule RepoTest do
       :ok
     end
 
+    defmodule Foo do
+      use Ecto.Schema
+      use Couchdb.Design
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "Foo" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
+        field :date, :date
+        field :time, :time
+      end
+    end
+
     test "update from get" do
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 3
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
@@ -669,6 +683,13 @@ defmodule RepoTest do
       assert uf2._rev != pf2._rev
       assert uf2.username == "doe"
       assert uf2.email == "doe@gmail.com"
+    end
+
+    test "date and time cast" do
+      fooc = Repo.insert! %Foo{date: ~D[1969-07-20], time: ~T[16:20:42]}
+      foof = CouchdbAdapter.get(Repo, Foo, fooc._id)
+      assert fooc.date == foof.date
+      assert fooc.time == foof.time
     end
   end
 
