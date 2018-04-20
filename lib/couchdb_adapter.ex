@@ -386,10 +386,13 @@ defmodule CouchdbAdapter do
       |> Enum.reduce([], fn ({preload_assoc, preload_inject}, acc) ->
           case schema.__schema__(:association, preload_assoc) do
             %Ecto.Association.BelongsTo{owner_key: fk, related: related_schema, field: field} ->
-              to_add =
-                get(repo, related_schema, Map.get(map, fk))
-                |> inject_preloads(repo, related_schema, preload_inject)
-              [{field, to_add} | acc]
+              value = Map.get(map, fk)
+              if value do
+                to_add = get(repo, related_schema, value) |> inject_preloads(repo, related_schema, preload_inject)
+                [{field, to_add} | acc]
+              else
+                acc
+              end
             _ ->
               raise "Unsupported preload (#{preload_assoc})!"
           end

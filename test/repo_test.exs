@@ -560,6 +560,12 @@ defmodule RepoTest do
       assert a2.b.c.title == "c"
       assert a2.b.c.d.title == "d"
     end
+
+    test "get preload missing association" do
+      pc = Repo.insert! A.changeset(%A{}, %{title: "a"})
+      assert not is_nil(CouchdbAdapter.get(Repo, A, pc._id, preload: :b))
+      assert not is_nil(CouchdbAdapter.get(Repo, A, pc._id, preload: [b: :c]))
+    end
   end
 
   describe "changeset" do
