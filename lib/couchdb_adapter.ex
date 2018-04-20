@@ -355,6 +355,7 @@ defmodule CouchdbAdapter do
          cb_process_doc(repo, schema, fields, preloads)
        end)
   end
+  defp cb_process_doc(_repo, _schema, :null, _preloads), do: nil
   defp cb_process_doc(repo, schema, {fields}, preloads) do
     data =
       fields
