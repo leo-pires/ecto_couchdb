@@ -332,12 +332,20 @@ defmodule CouchdbAdapter do
     preloads = Keyword.get(options, :preload, []) |> normalize_preloads
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
-         {:ok, data} <- :couchbeam_view.fetch(db, {type, view_name}, options |> Keyword.delete(:preload))
+         {:ok, data} <- :couchbeam_view.fetch(db, {type, view_name}, options |> fetch_options_humanize)
     do
       data |> cb_process_result(repo, schema, preloads)
     else
       {:error, {:error, reason}} -> raise inspect(reason)
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
+    end
+  end
+  defp fetch_options_humanize(options) do
+    options = options |> Keyword.delete(:preload)
+    if options[:descending] do
+      [:descending | options |> Keyword.delete(:descending)]
+    else
+      options
     end
   end
 

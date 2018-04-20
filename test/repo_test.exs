@@ -468,6 +468,26 @@ defmodule RepoTest do
       assert pf.user.email == "john@gmail.com"
     end
 
+    test "fetch_all limit" do
+      Repo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
+      pf = CouchdbAdapter.fetch_all(Repo, User, :all, limit: 1)
+      assert length(pf) == 1
+      assert Enum.at(pf, 0)._id == "test-user-id0"
+    end
+
+    test "fetch_all descending" do
+      Repo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
+      pf = CouchdbAdapter.fetch_all(Repo, User, :all, descending: true)
+      assert length(pf) == 2
+      assert Enum.at(pf, 0)._id == "test-user-id1"
+    end
+
+    test "fetch_one limit and descending" do
+      Repo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
+      pf = CouchdbAdapter.fetch_one(Repo, User, :all, limit: 1, descending: true)
+      assert pf._id == "test-user-id1"
+    end
+
     test "fetch all" do
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 3
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
