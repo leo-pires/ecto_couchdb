@@ -719,4 +719,43 @@ defmodule RepoTest do
     end
   end
 
+  describe "map as field" do
+    defmodule F do
+      use Ecto.Schema
+      embedded_schema do
+        field :t, :string
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:t])
+      end
+    end
+    defmodule E do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "E" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
+        field :t, :string
+        field :u, :string
+        field :d, :map
+        embeds_one :f, F
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:t, :d]) |> Ecto.Changeset.cast_embed(:f)
+      end
+    end
+
+    test "map cast" do
+      d = %{"a" => "a", "b" => ["b"], "c" => [%{"foo" => 1, "goo" => 2}, %{"foo" => 3, "goo" => 4}], "d" => %{"bar" => 3}}
+      {:ok, pc} = E.changeset(%E{}, %{t: "a", u: nil, d: d, f: %{t: nil}}) |> Repo.insert
+      pf = CouchdbAdapter.get(Repo, E, pc._id)
+      assert pf._id == pc._id
+      assert pf.t == "a"
+      assert is_nil(pf.u)
+      assert pf.d == d
+      assert is_nil(pf.f.t)
+    end
+  end
 end

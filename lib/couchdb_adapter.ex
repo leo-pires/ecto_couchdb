@@ -300,6 +300,8 @@ defmodule CouchdbAdapter do
 
   # Audo modifications
 
+  alias CouchdbAdapter.CouchbeamResultProcessor
+
   defp inject_type(fields, type) when is_map(fields), do: fields |> Map.put(:type, type)
   defp inject_type(fields, type), do: [{:type, type} | fields]
 
@@ -308,9 +310,9 @@ defmodule CouchdbAdapter do
     preloads = Keyword.get(options, :preload, []) |> normalize_preloads
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
-         {:ok, doc} <- :couchbeam.open_doc(db, id)
+         {:ok, data} <- :couchbeam.open_doc(db, id)
     do
-      cb_process_doc(repo, schema, doc, preloads)
+      data |> CouchbeamResultProcessor.ecto_process_result(repo, schema, preloads)
     else
       {:error, :not_found} -> nil
       {:error, {:error, reason}} -> raise inspect(reason)
@@ -334,7 +336,7 @@ defmodule CouchdbAdapter do
          {:ok, db} <- :couchbeam.open_db(server, database),
          {:ok, data} <- :couchbeam_view.fetch(db, {type, view_name}, options |> fetch_options_humanize)
     do
-      data |> cb_process_result(repo, schema, preloads)
+      data |> CouchbeamResultProcessor.ecto_process_result(repo, schema, preloads)
     else
       {:error, {:error, reason}} -> raise inspect(reason)
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
@@ -349,64 +351,10 @@ defmodule CouchdbAdapter do
     end
   end
 
-  defp cb_process_result(rows, repo, schema, preloads) do
-    rows
-    |> Enum.map(fn ({[{"id", _id}, {"key", _key}, {"value", fields}]}) ->
-         cb_process_doc(repo, schema, fields, preloads)
-       end)
-  end
-  defp cb_process_doc(_repo, _schema, :null, _preloads), do: nil
-  defp cb_process_doc(repo, schema, {fields}, preloads) do
-    data =
-      fields
-      |> Enum.reduce([], fn ({field_str, raw_value}, acc) ->
-           field = field_str |> String.to_atom
-           type = schema.__schema__(:type, field)
-           if is_nil(type), do: raise "Field #{field} doesnt exists in #{schema}"
-           value = cb_process_cast(type, raw_value, repo)
-           [{field, value} | acc]
-         end)
-      |> Map.new
-      |> inject_preloads(repo, schema, preloads)
-    Kernel.struct(schema, data)
-  end
-  defp cb_process_cast({:embed, %{related: related_schema}}, rows, repo) when is_list(rows) do
-    rows |> Enum.map(&(cb_process_doc(repo, related_schema, &1, [])))
-  end
-  defp cb_process_cast({:embed, %{related: related_schema}}, row, repo) do
-    cb_process_doc(repo, related_schema, row, [])
-  end
-  defp cb_process_cast(_type, :null, _repo), do: nil
-  defp cb_process_cast(type, value, _repo) do
-    {:ok, result} = Ecto.Type.cast(type, value)
-    result
-  end
-
   def normalize_preloads(f) when is_atom(f), do: [strict_normalize_preloads(f)]
   def normalize_preloads(o), do: strict_normalize_preloads(o)
   defp strict_normalize_preloads(f) when is_atom(f), do: {f, []}
   defp strict_normalize_preloads({f, l}), do: {f, normalize_preloads(l)}
   defp strict_normalize_preloads(l) when is_list(l), do: l |> Enum.map(&(strict_normalize_preloads(&1)))
 
-  def inject_preloads(map, _repo, _schema, [] = _preloads), do: map
-  def inject_preloads(map, repo, schema, preloads) do
-    to_inject =
-      preloads
-      |> Enum.reduce([], fn ({preload_assoc, preload_inject}, acc) ->
-          case schema.__schema__(:association, preload_assoc) do
-            %Ecto.Association.BelongsTo{owner_key: fk, related: related_schema, field: field} ->
-              value = Map.get(map, fk)
-              if value do
-                to_add = get(repo, related_schema, value) |> inject_preloads(repo, related_schema, preload_inject)
-                [{field, to_add} | acc]
-              else
-                acc
-              end
-            _ ->
-              raise "Unsupported preload (#{preload_assoc})!"
-          end
-        end)
-      |> Map.new
-    Map.merge(map, to_inject)
-  end
 end
