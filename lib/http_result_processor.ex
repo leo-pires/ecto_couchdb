@@ -7,7 +7,10 @@ defmodule CouchdbAdapter.HttpResultProcessor do
     |> Enum.map(fn (%{"rows" => rows} when is_list(rows)) ->
        rows
        |> Enum.map(fn (%{"value" => value}) ->
-        value |> process_doc(cast_fun, pp_fun, payload)
+            case value do
+              value when is_map(value) -> value |> process_doc(cast_fun, pp_fun, payload)
+              _ -> value
+            end
           end)
        end)
   end

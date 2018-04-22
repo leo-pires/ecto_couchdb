@@ -22,6 +22,10 @@ defmodule RepoTest do
                      views: %{
                        all: %{
                          map: "function(doc) { if (doc.type === 'User') emit(doc._id, doc) }"
+                       },
+                       counts: %{
+                         map: "function(doc) { emit(doc._id, 1) }",
+                         reduce: "_count"
                        }
                    }}]
     docs = for i <- 1..3, do: %{_id: "id#{i}", title: "t#{i}", body: "b#{i}", type: "Post",
@@ -799,6 +803,12 @@ defmodule RepoTest do
       assert b._id == "test-user-id2"
       assert b.username == "alice"
       assert b.email == "alice@gmail.com"
+    end
+
+    test "multiple_fetch_all group_level 0" do
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, [%{group_level: 0}], as_map: true)
+      v = list |> Enum.at(0) |> Enum.at(0)
+      assert v == 6
     end
 
     test "find" do
