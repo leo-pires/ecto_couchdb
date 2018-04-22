@@ -376,10 +376,10 @@ defmodule CouchdbAdapter do
     end
   end
 
-  def find(repo, schema, params, options \\ []) do
+  def find(repo, schema, selector, options \\ []) do
     preloads = Keyword.get(options, :preload, []) |> normalize_preloads
     url = "#{url_for(repo)}/_find"
-    with {:ok, data} <- url |> http_post(params),
+    with {:ok, data} <- url |> http_post(%{selector: selector}),
          result <- data |> process_result(HttpResultProcessor, repo, schema, preloads) do
       {:ok, result}
     end

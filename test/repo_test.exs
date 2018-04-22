@@ -817,7 +817,7 @@ defmodule RepoTest do
     end
 
     test "find" do
-      {:ok, list} = CouchdbAdapter.find(Repo, User, %{selector: %{username: %{"$eq" => "alice"}}})
+      {:ok, list} = CouchdbAdapter.find(Repo, User, %{username: %{"$eq" => "alice"}})
       a = list |> hd
       assert a._id == "test-user-id2"
       assert a.email == "alice@gmail.com"
@@ -825,7 +825,7 @@ defmodule RepoTest do
 
     test "find with preloads" do
       pc = Repo.insert! %Post{title: "chibata", body: "lorem ipsum", user: %User{_id: "test-user-id-john", username: "john", email: "john@gmail.com"}}
-      {:ok, list} = CouchdbAdapter.find(Repo, Post, %{selector: %{title: %{"$eq" => "chibata"}}}, preload: :user)
+      {:ok, list} = CouchdbAdapter.find(Repo, Post, %{title: %{"$eq" => "chibata"}}, preload: :user)
       a = list |> hd
       assert a._id == pc._id
       assert a.title == "chibata"
