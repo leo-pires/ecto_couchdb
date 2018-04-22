@@ -759,20 +759,64 @@ defmodule RepoTest do
     end
   end
 
-  describe "foo" do
-    setup %{db: db, design_docs: design_docs} do
+  describe "direct http calls" do
+    setup %{db: db, design_docs: design_docs, docs: docs} do
       design_docs |> Enum.each(fn (design_doc) ->
         :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
       end)
+      {:ok, _results} = :couchbeam.save_docs(db, Enum.map(docs, fn(doc) ->
+        CouchdbAdapter.to_doc(doc)
+      end))
       Repo.insert! %User{_id: "test-user-id1", type: "User", username: "bob", email: "bob@gmail.com"}
-      Repo.insert! %User{_id: "test-user-id2", type: "User", username: "bob", email: "bob@gmail.com"}
+      Repo.insert! %User{_id: "test-user-id2", type: "User", username: "alice", email: "alice@gmail.com"}
       Repo.insert! %User{_id: "test-user-id3", type: "User", username: "bob", email: "bob@gmail.com"}
       :ok
     end
 
-    test "foo" do
-      CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}]) |> IO.inspect
-      CouchdbAdapter.find(Repo, User, %{selector: %{}}) |> IO.inspect
+    test "multiple_fetch_all works for Ecto schema" do
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}])
+      a = list |> Enum.at(0) |> Enum.at(0)
+      b = list |> Enum.at(1) |> Enum.at(0)
+      assert a.__struct__ == User
+      assert a._id == "test-user-id1"
+      assert a.username == "bob"
+      assert a.email == "bob@gmail.com"
+      assert b.__struct__ == User
+      assert b._id == "test-user-id2"
+      assert b.username == "alice"
+      assert b.email == "alice@gmail.com"
+    end
+
+    test "multiple_fetch_all works for map" do
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}], as_map: true)
+      a = list |> Enum.at(0) |> Enum.at(0)
+      b = list |> Enum.at(1) |> Enum.at(0)
+      assert is_nil(Map.get(a, :__struct__))
+      assert a._id == "test-user-id1"
+      assert a.username == "bob"
+      assert a.email == "bob@gmail.com"
+      assert is_nil(Map.get(b, :__struct__))
+      assert b._id == "test-user-id2"
+      assert b.username == "alice"
+      assert b.email == "alice@gmail.com"
+    end
+
+    test "find" do
+      {:ok, list} = CouchdbAdapter.find(Repo, User, %{selector: %{username: %{"$eq" => "alice"}}})
+      a = list |> hd
+      assert a._id == "test-user-id2"
+      assert a.email == "alice@gmail.com"
+    end
+
+    test "find with preloads" do
+      pc = Repo.insert! %Post{title: "chibata", body: "lorem ipsum", user: %User{_id: "test-user-id-john", username: "john", email: "john@gmail.com"}}
+      {:ok, list} = CouchdbAdapter.find(Repo, Post, %{selector: %{title: %{"$eq" => "chibata"}}}, preload: :user)
+      a = list |> hd
+      assert a._id == pc._id
+      assert a.title == "chibata"
+      assert a.user_id == "test-user-id-john"
+      assert not is_nil(a.user)
+      assert a.user._id == "test-user-id-john"
     end
   end
 end

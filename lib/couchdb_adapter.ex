@@ -326,7 +326,7 @@ defmodule CouchdbAdapter do
 
   # Fetchers for Audo
 
-  alias CouchdbAdapter.CouchbeamResultProcessor
+  alias CouchdbAdapter.{CouchbeamResultProcessor, HttpResultProcessor}
 
   def get(repo, schema, id, options \\ []) do
     database = repo.config[:database]
@@ -365,33 +365,31 @@ defmodule CouchdbAdapter do
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
-  defp fetch_options_humanize(options) do
-    options = options |> Keyword.delete(:preload)
-    if options[:descending] do
-      [:descending | options |> Keyword.delete(:descending)]
-    else
-      options
+
+  def multiple_fetch_all(repo, schema, view, queries, options \\ []) do
+    ddoc = db_name(schema)
+    url = "#{url_for(repo)}/_design/#{ddoc}/_view/#{view}"
+    with {:ok, data} <- url |> http_post(%{queries: queries}),
+         result <- data |> process_result(HttpResultProcessor, repo, cast_to(schema, options), []) do
+      {:ok, result}
     end
   end
 
-  def multiple_fetch_all(repo, schema, view, queries) do
-    ddoc = db_name(schema)
-    "#{url_for(repo)}/_design/#{ddoc}/_view/#{view}"
-    |> http_post(%{queries: queries})
-    |> http_process_response
+  def find(repo, schema, params, options \\ []) do
+    preloads = Keyword.get(options, :preload, []) |> normalize_preloads
+    url = "#{url_for(repo)}/_find"
+    with {:ok, data} <- url |> http_post(params),
+         result <- data |> process_result(HttpResultProcessor, repo, schema, preloads) do
+      {:ok, result}
+    end
   end
 
-  def find(repo, _schema, params) do
-    "#{url_for(repo)}/_find"
-    |> http_post(params)
-    |> http_process_response
+  defp process_result(data, processor, _repo, :map, _preloads) do
+    data |> processor.identity_process_result(true)
   end
-
-  defp http_post(url, params) do
-    url |> HTTPoison.post(Poison.encode!(params), [{"Content-Type", "application/json; charset=utf-8"}])
+  defp process_result(data, processor, repo, schema, preloads) do
+    data |> processor.ecto_process_result(repo, schema, preloads)
   end
-  defp http_process_response({:ok, %{body: body}}), do: Poison.decode!(body)
-  defp http_process_response({:error, %{reason: reason}}), do: raise "Could not fetch"
 
   def inject_preloads(map, _repo, _schema, [] = _preloads), do: map
   def inject_preloads(map, repo, schema, preloads) do
@@ -420,5 +418,31 @@ defmodule CouchdbAdapter do
   defp strict_normalize_preloads(f) when is_atom(f), do: {f, []}
   defp strict_normalize_preloads({f, l}), do: {f, normalize_preloads(l)}
   defp strict_normalize_preloads(l) when is_list(l), do: l |> Enum.map(&(strict_normalize_preloads(&1)))
+
+  defp http_post(url, params) do
+    url
+    |> HTTPoison.post(Poison.encode!(params), [{"Content-Type", "application/json; charset=utf-8"}])
+    |> http_process_response
+  end
+  defp http_process_response({:ok, %{body: body}}), do: http_process_response({:ok, Poison.decode!(body)})
+  defp http_process_response({:ok, %{"reason" => reason}}), do: {:error, "Could not fetch (#{reason})"}
+  defp http_process_response({:ok, map}) when is_map(map), do: {:ok, map}
+  defp http_process_response({:error, %{reason: reason}}), do: {:error, "Cound not fetch (#{reason})"}
+
+  defp fetch_options_humanize(options) do
+    options = options |> Keyword.delete(:preload)
+    if options[:descending] do
+      [:descending | options |> Keyword.delete(:descending)]
+    else
+      options
+    end
+  end
+  defp cast_to(schema, options) do
+    if Keyword.get(options, :as_map, false) do
+      :map
+    else
+      schema
+    end
+  end
 
 end
