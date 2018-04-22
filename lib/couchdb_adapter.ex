@@ -367,10 +367,11 @@ defmodule CouchdbAdapter do
   end
 
   def multiple_fetch_all(repo, schema, view, queries, options \\ []) do
+    fetch_keys = Keyword.get(options, :fetch_keys, false)
     ddoc = db_name(schema)
     url = "#{url_for(repo)}/_design/#{ddoc}/_view/#{view}"
     with {:ok, data} <- url |> http_post(%{queries: queries}),
-         result <- data |> process_result(HttpResultProcessor, repo, cast_to(schema, options), []) do
+         result <- data |> process_result(HttpResultProcessor, repo, cast_to(schema, options), [], fetch_keys) do
       {:ok, result}
     end
   end
@@ -384,10 +385,17 @@ defmodule CouchdbAdapter do
     end
   end
 
-  defp process_result(data, processor, _repo, :map, _preloads) do
+  # TODO: better api when using as_map and fetch_keys
+  defp process_result(data, processor, repo, schema, preloads) do
+    process_result(data, processor, repo, schema, preloads, false)
+  end
+  defp process_result(data, processor, _repo, :map, _preloads, false) do
     data |> processor.identity_process_result(true)
   end
-  defp process_result(data, processor, repo, schema, preloads) do
+  defp process_result(data, processor, _repo, :map, _preloads, true) do
+    data |> processor.process_result_keys
+  end
+  defp process_result(data, processor, repo, schema, preloads, false) do
     data |> processor.ecto_process_result(repo, schema, preloads)
   end
 

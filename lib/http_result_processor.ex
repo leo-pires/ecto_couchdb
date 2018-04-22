@@ -1,21 +1,27 @@
 defmodule CouchdbAdapter.HttpResultProcessor do
 
-  # Generic functions to process Couchbeam results
-
   def process_result(%{"results" => rows}, cast_fun, pp_fun, payload) when is_list(rows) do
     rows
     |> Enum.map(fn (%{"rows" => rows} when is_list(rows)) ->
-       rows
-       |> Enum.map(fn (%{"value" => value}) ->
-            case value do
-              value when is_map(value) -> value |> process_doc(cast_fun, pp_fun, payload)
-              _ -> value
-            end
-          end)
+         rows
+         |> Enum.map(fn (%{"value" => value}) ->
+              case value do
+                value when is_map(value) -> value |> process_doc(cast_fun, pp_fun, payload)
+                _ -> value
+              end
+            end)
        end)
   end
   def process_result(%{"docs" => docs}, cast_fun, pp_fun, payload) when is_list(docs) do
     docs |> Enum.map(&(&1 |> process_doc(cast_fun, pp_fun, payload)))
+  end
+
+  def process_result_keys(%{"results" => rows}) when is_list(rows) do
+    rows
+    |> Enum.map(fn (%{"rows" => rows} when is_list(rows)) ->
+         rows
+         |> Enum.map(fn (%{"key" => key}) -> key end)
+       end)
   end
 
   def process_doc(nil, _cast_fun, _pp_fun, _payload), do: nil

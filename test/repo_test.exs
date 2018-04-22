@@ -811,6 +811,11 @@ defmodule RepoTest do
       assert v == 6
     end
 
+    test "multiple_fetch_all with fetch_keys" do
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, [%{group_level: 0}], as_map: true, fetch_keys: true)
+      assert list == [[nil]]
+    end
+
     test "find" do
       {:ok, list} = CouchdbAdapter.find(Repo, User, %{selector: %{username: %{"$eq" => "alice"}}})
       a = list |> hd

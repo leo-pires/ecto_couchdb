@@ -1,7 +1,5 @@
 defmodule CouchdbAdapter.CouchbeamResultProcessor do
 
-  # Generic functions to process Couchbeam results
-
   def process_result(row, cast_fun, pp_fun, payload) when is_tuple(row) do
     row |> process_doc(cast_fun, pp_fun, payload)
   end
