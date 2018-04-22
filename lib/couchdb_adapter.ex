@@ -53,13 +53,37 @@ defmodule CouchdbAdapter do
 
 
   # Returns the server connection to use with the given repo
+  # TODO: reuse url_for
+  defp url_for(repo) do
+    config = repo.config
+    protocol = Keyword.get(config, :protocol, "http")
+    hostname = Keyword.get(config, :hostname, "localhost")
+    port = Keyword.get(config, :port, 5984)
+    username = Keyword.get(config, :username)
+    password = Keyword.get(config, :password)
+    database = Keyword.get(config, :database)
+    if username && password do
+      "#{protocol}://#{username}:#{password}@#{hostname}:#{port}/#{database}"
+    else
+      "#{protocol}://#{hostname}:#{port}/#{database}"
+    end
+  end
   defp server_for(repo) do
     config = repo.config
-    host = Keyword.get(config, :hostname, "localhost")
+    protocol = Keyword.get(config, :protocol, "http")
+    hostname = Keyword.get(config, :hostname, "localhost")
     port = Keyword.get(config, :port, 5984)
-    prefix = Keyword.get(config, :prefix, "")
-    options = [pool: repo]
-    :couchbeam.server_connection(host, port, prefix, options)
+    username = Keyword.get(config, :username)
+    password = Keyword.get(config, :password)
+    base_options = [pool: repo]
+    options =
+      if username && password do
+        base_options |> Keyword.put(:basic_auth, {username, password})
+      else
+        base_options
+      end
+    server_url = "#{protocol}://#{hostname}:#{port}"
+    :couchbeam.server_connection(server_url, options)
   end
 
   def ensure_all_started(_repo, type) do
@@ -233,7 +257,6 @@ defmodule CouchdbAdapter do
 
   @doc false
   def execute(repo, query_meta, {_cache, query}, _params, preprocess, _options) do
-    # TODO: implement queries using type
     type = db_name(query_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
@@ -298,12 +321,12 @@ defmodule CouchdbAdapter do
     end
   end
 
-  # Audo modifications
-
-  alias CouchdbAdapter.CouchbeamResultProcessor
-
   defp inject_type(fields, type) when is_map(fields), do: fields |> Map.put(:type, type)
   defp inject_type(fields, type), do: [{:type, type} | fields]
+
+  # Fetchers for Audo
+
+  alias CouchdbAdapter.CouchbeamResultProcessor
 
   def get(repo, schema, id, options \\ []) do
     database = repo.config[:database]
@@ -349,6 +372,47 @@ defmodule CouchdbAdapter do
     else
       options
     end
+  end
+
+  def multiple_fetch_all(repo, schema, view, queries) do
+    ddoc = db_name(schema)
+    "#{url_for(repo)}/_design/#{ddoc}/_view/#{view}"
+    |> http_post(%{queries: queries})
+    |> http_process_response
+  end
+
+  def find(repo, _schema, params) do
+    "#{url_for(repo)}/_find"
+    |> http_post(params)
+    |> http_process_response
+  end
+
+  defp http_post(url, params) do
+    url |> HTTPoison.post(Poison.encode!(params), [{"Content-Type", "application/json; charset=utf-8"}])
+  end
+  defp http_process_response({:ok, %{body: body}}), do: Poison.decode!(body)
+  defp http_process_response({:error, %{reason: reason}}), do: raise "Could not fetch"
+
+  def inject_preloads(map, _repo, _schema, [] = _preloads), do: map
+  def inject_preloads(map, repo, schema, preloads) do
+    to_inject =
+      preloads
+      |> Enum.reduce([], fn ({preload_assoc, preload_inject}, acc) ->
+          case schema.__schema__(:association, preload_assoc) do
+            %Ecto.Association.BelongsTo{owner_key: fk, related: related_schema, field: field} ->
+              value = Map.get(map, fk)
+              if value do
+                to_add = CouchdbAdapter.get(repo, related_schema, value) |> inject_preloads(repo, related_schema, preload_inject)
+                [{field, to_add} | acc]
+              else
+                acc
+              end
+            _ ->
+              raise "Unsupported preload type for #{preload_assoc}"
+          end
+        end)
+      |> Map.new
+    Map.merge(map, to_inject)
   end
 
   def normalize_preloads(f) when is_atom(f), do: [strict_normalize_preloads(f)]

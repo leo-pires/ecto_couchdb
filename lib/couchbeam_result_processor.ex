@@ -80,29 +80,7 @@ defmodule CouchdbAdapter.CouchbeamResultProcessor do
   end
 
   def ecto_pp_fun(map, %{repo: repo, schema: schema, preloads: preloads}) do
-    Kernel.struct(schema, map |> inject_preloads(repo, schema, preloads))
-  end
-
-  def inject_preloads(map, _repo, _schema, [] = _preloads), do: map
-  def inject_preloads(map, repo, schema, preloads) do
-    to_inject =
-      preloads
-      |> Enum.reduce([], fn ({preload_assoc, preload_inject}, acc) ->
-          case schema.__schema__(:association, preload_assoc) do
-            %Ecto.Association.BelongsTo{owner_key: fk, related: related_schema, field: field} ->
-              value = Map.get(map, fk)
-              if value do
-                to_add = CouchdbAdapter.get(repo, related_schema, value) |> inject_preloads(repo, related_schema, preload_inject)
-                [{field, to_add} | acc]
-              else
-                acc
-              end
-            _ ->
-              raise "Unsupported preload type for #{preload_assoc}"
-          end
-        end)
-      |> Map.new
-    Map.merge(map, to_inject)
+    Kernel.struct(schema, map |> CouchdbAdapter.inject_preloads(repo, schema, preloads))
   end
 
 end

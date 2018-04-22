@@ -758,4 +758,21 @@ defmodule RepoTest do
       assert is_nil(pf.f.t)
     end
   end
+
+  describe "foo" do
+    setup %{db: db, design_docs: design_docs} do
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
+      Repo.insert! %User{_id: "test-user-id1", type: "User", username: "bob", email: "bob@gmail.com"}
+      Repo.insert! %User{_id: "test-user-id2", type: "User", username: "bob", email: "bob@gmail.com"}
+      Repo.insert! %User{_id: "test-user-id3", type: "User", username: "bob", email: "bob@gmail.com"}
+      :ok
+    end
+
+    test "foo" do
+      CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}]) |> IO.inspect
+      CouchdbAdapter.find(Repo, User, %{selector: %{}}) |> IO.inspect
+    end
+  end
 end
