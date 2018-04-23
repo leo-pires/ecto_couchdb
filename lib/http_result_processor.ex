@@ -15,7 +15,7 @@ defmodule CouchdbAdapter.HttpResultProcessor do
   def process_result(%{"docs" => docs}, cast_fun, pp_fun, payload) when is_list(docs) do
     docs |> Enum.map(&(&1 |> process_doc(cast_fun, pp_fun, payload)))
   end
-  def process_result(map, cast_fun, pp_fun, payload) when is_map(map), do: map
+  def process_result(map, _cast_fun, _pp_fun, _payload) when is_map(map), do: map
 
   def process_result_keys(%{"results" => rows}) when is_list(rows) do
     rows

@@ -400,6 +400,7 @@ defmodule CouchdbAdapter do
   end
 
   def inject_preloads(map, _repo, _schema, [] = _preloads), do: map
+  def inject_preloads(nil, _repo, _schema, _preloads), do: nil
   def inject_preloads(map, repo, schema, preloads) do
     to_inject =
       preloads
