@@ -171,14 +171,15 @@ defmodule RepoTest do
       assert {:ok, _} = Repo.delete(post)
     end
 
-    test "fails with a check constraint if the revision is outdated", %{docs: docs} do
+    test "fails with stale if the revision is outdated", %{docs: docs} do
       import Ecto.Changeset
       {deleted_doc, _docs} = List.pop_at(docs, 1)
-      {:error, changeset} = struct(Post, %{_id: deleted_doc._id, _rev: "0-outdated"})
-                            |> change
-                            |> check_constraint(:_rev, name: "conflict")
-                            |> Repo.delete
-      assert changeset.errors[:_rev] != nil
+      assert_raise(Ecto.StaleEntryError,
+                   fn ->
+                     struct(Post, %{_id: deleted_doc._id, _rev: "0-outdated"})
+                     |> change
+                     |> Repo.delete
+                   end)
     end
 
     defmodule Other do

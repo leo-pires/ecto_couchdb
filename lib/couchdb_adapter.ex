@@ -168,8 +168,10 @@ defmodule CouchdbAdapter do
       if ok != :undefined do
         {:ok, _rev: :couchbeam_doc.get_value("rev", result)}
       else
-        error = :couchbeam_doc.get_value("error", result)
-        {:invalid, [check: error]}
+        case :couchbeam_doc.get_value("error", result) do
+          "conflict" -> {:error, :stale}
+          error -> {:invalid, [check: error]}
+        end
       end
     else
       {:error, reason} -> raise "Error while deleting (#{inspect(reason)})"
@@ -194,6 +196,10 @@ defmodule CouchdbAdapter do
     do
       fields = for field <- returning, do: {field, :couchbeam_doc.get_value(to_string(field), doc)}
       {:ok, fields}
+    else
+      {:error, :conflict} -> {:error, :stale}
+      {:error, :stale} -> {:error, :stale}
+      {:error, reason} -> raise "Error while updating (#{inspect(reason)})"
     end
   end
 
