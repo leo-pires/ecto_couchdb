@@ -78,9 +78,7 @@ defmodule CouchdbAdapter.CouchbeamResultProcessor do
   end
 
   def ecto_pp_fun(map, %{repo: repo, schema: schema, preloads: preloads}) do
-    schema
-    |> Kernel.struct(map |> CouchdbAdapter.inject_preloads(repo, schema, preloads))
-    |> Ecto.put_meta(state: :loaded)
+    Kernel.struct(schema, map |> CouchdbAdapter.inject_preloads(repo, schema, preloads))
   end
 
 end

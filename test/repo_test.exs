@@ -90,13 +90,6 @@ defmodule RepoTest do
       assert has_id_and_rev?(result)
     end
 
-    test "nil embeds" do
-      {:ok, pc} = Repo.insert Post.changeset(%Post{}, %{title: "lorem", grants: [%{id: "1", user: "1", access: "1"}]})
-      assert length(pc.grants) == 1
-      {:ok, pu} = Repo.update Post.changeset(pc, %{grants: []})
-      assert length(pu.grants) == 0
-    end
-
     test "generates timestamps", %{post: post} do
       {:ok, inserted} = Repo.insert(post)
       assert not is_nil(inserted.inserted_at)
@@ -336,12 +329,6 @@ defmodule RepoTest do
       assert pf.user._id == "test-user-id1"
       assert pf.user.username == "john"
       assert pf.user.email == "john@gmail.com"
-    end
-
-    test "preload inject a meta state :loaded" do
-      pc = Repo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
-      pf = CouchdbAdapter.fetch_one(Repo, Post, :all, key: pc._id, preload: :user)
-      assert pf.user.__meta__.state == :loaded
     end
 
     test "fetch_all limit" do
