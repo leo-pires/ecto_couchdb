@@ -29,6 +29,7 @@ defmodule Post do
       struct
       |> Ecto.Changeset.cast(params, [:title, :body])
       |> Ecto.Changeset.cast_assoc(:user)
+      |> Ecto.Changeset.cast_embed(:grants)
     end
   end
 end
