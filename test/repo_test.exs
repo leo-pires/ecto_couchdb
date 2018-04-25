@@ -356,6 +356,10 @@ defmodule RepoTest do
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
     end
 
+    test "raise if invalid view name" do
+      assert_raise RuntimeError, fn -> CouchdbAdapter.fetch_all(Repo, Post, :xpto) end
+    end
+
     defmodule D do
       use Ecto.Schema
       use Couchdb.Design

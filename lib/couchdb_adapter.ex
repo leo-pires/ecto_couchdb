@@ -234,6 +234,7 @@ defmodule CouchdbAdapter do
         {:error, :stale}
       end
     else
+      {:error, :not_found} -> {:error, :stale}
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
@@ -278,7 +279,7 @@ defmodule CouchdbAdapter do
     do
       data |> CouchbeamResultProcessor.ecto_process_result(repo, schema, preloads)
     else
-      {:error, {:error, reason}} -> raise inspect(reason)
+      {:error, :not_found} -> raise "View not found (#{type}, #{view_name})"
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
