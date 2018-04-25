@@ -158,7 +158,7 @@ defmodule CouchdbAdapter do
     raise "Unsupported operation in CouchdbAdapter: delete_all"
   end
 
-  def delete(repo, _schema_meta, filters, _options) do
+  def delete(repo, schema_meta, filters, options) do
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -169,8 +169,17 @@ defmodule CouchdbAdapter do
         {:ok, _rev: :couchbeam_doc.get_value("rev", result)}
       else
         case :couchbeam_doc.get_value("error", result) do
-          "conflict" -> {:error, :stale}
-          error -> {:invalid, [check: error]}
+          "conflict" ->
+            if Keyword.get(options, :on_conflict, nil) == :retry do
+              {:ok, doc} = :couchbeam.open_doc(db, filters[:_id])
+              rev = :couchbeam_doc.get_rev(doc)
+              new_filters = filters |> Keyword.put(:_rev, rev)
+              delete(repo, schema_meta, new_filters, options)
+            else
+              {:error, :stale}
+            end
+          error ->
+            {:invalid, [check: error]}
         end
       end
     else
@@ -182,7 +191,7 @@ defmodule CouchdbAdapter do
     raise "Unsupported operation in CouchdbAdapter: execute"
   end
 
-  def update(repo, schema_meta, fields, filters, returning, _options) do
+  def update(repo, schema_meta, fields, filters, returning, options) do
     type = db_name(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
@@ -197,8 +206,17 @@ defmodule CouchdbAdapter do
       fields = for field <- returning, do: {field, :couchbeam_doc.get_value(to_string(field), doc)}
       {:ok, fields}
     else
-      {:error, :conflict} -> {:error, :stale}
-      {:error, :stale} -> {:error, :stale}
+        {:error, e} when e in [:conflict, :stale] ->
+          if Keyword.get(options, :on_conflict, nil) == :retry do
+            server = server_for(repo)
+            {:ok, db} = :couchbeam.open_db(server, database)
+            {:ok, doc} = :couchbeam.open_doc(db, filters[:_id])
+            rev = :couchbeam_doc.get_rev(doc)
+            new_filters = filters |> Keyword.put(:_rev, rev)
+            update(repo, schema_meta, fields, new_filters, returning, options)
+          else
+            {:error, :stale}            
+          end
       {:error, reason} -> raise "Error while updating (#{inspect(reason)})"
     end
   end
@@ -216,7 +234,6 @@ defmodule CouchdbAdapter do
         {:error, :stale}
       end
     else
-      {:error, :not_found} -> {:error, :stale}
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
