@@ -5,8 +5,11 @@ defmodule CouchdbAdapter.CouchbeamResultProcessor do
   end
   def process_result(rows, cast_fun, pp_fun, payload) when is_list(rows) do
     rows
-    |> Enum.map(fn ({[{"id", _id}, {"key", _key}, {"value", value}]}) ->
-         value |> process_doc(cast_fun, pp_fun, payload)
+    |> Enum.map(fn
+        {[{"id", _id}, {"key", _key}, {"value", value}]} ->
+          value |> process_doc(cast_fun, pp_fun, payload)
+        {[{"id", _id}, {"key", _key}, {"value", _value}, {"doc", doc}]} ->
+          doc |> process_doc(cast_fun, pp_fun, payload)
        end)
   end
 

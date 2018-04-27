@@ -356,13 +356,14 @@ defmodule CouchdbAdapter do
   defp http_process_response({:ok, map}) when is_map(map), do: {:ok, map}
   defp http_process_response({:error, %{reason: reason}}), do: {:error, "Cound not fetch (#{reason})"}
 
+  @bool_to_atom [:include_docs, :descending]
   defp fetch_options_humanize(options) do
-    options = options |> Keyword.delete(:preload)
-    if options[:descending] do
-      [:descending | options |> Keyword.delete(:descending)]
-    else
-      options
-    end
+    options
+    |> Enum.reduce([], fn
+         ({opt, true}, acc) when opt in @bool_to_atom -> [opt | acc]
+         ({opt, false}, acc) when opt in @bool_to_atom -> acc
+         ({opt, value}, acc) -> [{opt, value} | acc]
+       end)
   end
   defp cast_to(schema, options) do
     if Keyword.get(options, :as_map, false) do
