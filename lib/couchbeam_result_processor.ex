@@ -63,7 +63,10 @@ defmodule CouchdbAdapter.CouchbeamResultProcessor do
      value =
        case type do
          {:embed, %{related: related_schema}} ->
-           raw_value |> ecto_process_doc(%{repo: repo, schema: related_schema, preloads: []})
+          case raw_value do
+            {[]} -> []
+             _ -> raw_value |> ecto_process_doc(%{repo: repo, schema: related_schema, preloads: []})
+          end
          {:array, _} ->
           raise "Not implemented... yet"
          :map ->

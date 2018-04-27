@@ -250,6 +250,17 @@ defmodule RepoTest do
       assert :couchbeam_doc.get_value("access", stored_grant) == "new"
     end
 
+    test "works with embeds_many after empty update", %{posts: [post | _]} do
+      {:ok, updated_post} = post
+                            |> Ecto.Changeset.change
+                            |> Ecto.Changeset.put_embed(:grants, [])
+                            |> Repo.update
+      assert length(updated_post.grants) == 0
+      # check persisted data
+      post = CouchdbAdapter.get(Repo, Post, post._id)
+      assert [] = post.grants
+    end
+
     test "raises Ecto.StaleEntryError if document is not found", %{posts: [post | _]} do
       missing_post = post |> Map.put(:_id, "not found")
       assert_raise(Ecto.StaleEntryError,
