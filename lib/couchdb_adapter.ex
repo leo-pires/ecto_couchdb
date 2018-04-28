@@ -284,20 +284,20 @@ defmodule CouchdbAdapter do
     end
   end
 
-  def multiple_fetch_all(repo, schema, view, queries, options \\ []) do
+  def multiple_fetch_all(repo, schema, view, params, options \\ []) do
     fetch_keys = Keyword.get(options, :fetch_keys, false)
     ddoc = db_name(schema)
     url = "#{url_for(repo)}/_design/#{ddoc}/_view/#{view}"
-    with {:ok, data} <- url |> http_post(%{queries: queries}),
+    with {:ok, data} <- url |> http_post(params),
          result <- data |> process_result(HttpResultProcessor, repo, cast_to(schema, options), [], fetch_keys) do
       {:ok, result}
     end
   end
 
-  def find(repo, schema, selector, options \\ []) do
+  def find(repo, schema, params, options \\ []) do
     preloads = Keyword.get(options, :preload, []) |> normalize_preloads
     url = "#{url_for(repo)}/_find"
-    with {:ok, data} <- url |> http_post(%{selector: selector}),
+    with {:ok, data} <- url |> http_post(params),
          result <- data |> process_result(HttpResultProcessor, repo, schema, preloads) do
       {:ok, result}
     end

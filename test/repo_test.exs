@@ -652,7 +652,7 @@ defmodule RepoTest do
     end
 
     test "multiple_fetch_all works for Ecto schema" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}])
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, %{queries: [%{key: "test-user-id1"}, %{key: "test-user-id2"}]})
       a = list |> Enum.at(0) |> Enum.at(0)
       b = list |> Enum.at(1) |> Enum.at(0)
       assert a.__struct__ == User
@@ -666,7 +666,7 @@ defmodule RepoTest do
     end
 
     test "multiple_fetch_all works for map" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}], as_map: true)
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, %{queries: [%{key: "test-user-id1"}, %{key: "test-user-id2"}]}, as_map: true)
       a = list |> Enum.at(0) |> Enum.at(0)
       b = list |> Enum.at(1) |> Enum.at(0)
       assert is_nil(Map.get(a, :__struct__))
@@ -680,18 +680,18 @@ defmodule RepoTest do
     end
 
     test "multiple_fetch_all group_level 0" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, [%{group_level: 0}], as_map: true)
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, %{queries: [%{group_level: 0}]}, as_map: true)
       v = list |> Enum.at(0) |> Enum.at(0)
       assert v == 6
     end
 
     test "multiple_fetch_all with fetch_keys" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, [%{group_level: 0}], as_map: true, fetch_keys: true)
+      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, %{queries: [%{group_level: 0}]}, as_map: true, fetch_keys: true)
       assert list == [[nil]]
     end
 
     test "find" do
-      {:ok, list} = CouchdbAdapter.find(Repo, User, %{username: %{"$eq" => "alice"}})
+      {:ok, list} = CouchdbAdapter.find(Repo, User, %{selector: %{username: %{"$eq" => "alice"}}})
       a = list |> hd
       assert a._id == "test-user-id2"
       assert a.email == "alice@gmail.com"
@@ -699,7 +699,7 @@ defmodule RepoTest do
 
     test "find with preloads" do
       pc = Repo.insert! %Post{title: "chibata", body: "lorem ipsum", user: %User{_id: "test-user-id-john", username: "john", email: "john@gmail.com"}}
-      {:ok, list} = CouchdbAdapter.find(Repo, Post, %{title: %{"$eq" => "chibata"}}, preload: :user)
+      {:ok, list} = CouchdbAdapter.find(Repo, Post, %{selector: %{title: %{"$eq" => "chibata"}}}, preload: :user)
       a = list |> hd
       assert a._id == pc._id
       assert a.title == "chibata"
