@@ -33,8 +33,12 @@ defmodule CouchdbAdapter.CouchbeamResultProcessor do
 
   # Identity cast and post processor functions
 
+  def identity_process_result({[]}), do: []
   def identity_process_result(result) when is_tuple(result) do
     result |> process_doc(&identity_cast_fun/2, &identity_cast_pp/2, nil)
+  end
+  def identity_process_result(list) when is_list(list) do
+    list |> Enum.map(&(&1 |> identity_process_result))
   end
 
   def identity_cast_fun({field, tuple}, _payload) when is_tuple(tuple) and is_list(elem(tuple, 0)) do
@@ -55,6 +59,7 @@ defmodule CouchdbAdapter.CouchbeamResultProcessor do
     result |> process_result(&ecto_cast_fun/2, &ecto_pp_fun/2, %{repo: repo, schema: schema, preloads: preloads})
   end
 
+  def ecto_process_doc({[]}, _), do: []
   def ecto_process_doc(result, payload) do
     result |> process_doc(&ecto_cast_fun/2, &ecto_pp_fun/2, payload)
   end
@@ -62,16 +67,13 @@ defmodule CouchdbAdapter.CouchbeamResultProcessor do
   def ecto_cast_fun({field_str, raw_value}, %{schema: schema, repo: repo}) do
      field = field_str |> String.to_atom
      type = schema.__schema__(:type, field)
-     if is_nil(type), do: raise "Field #{field} doesnt exists in #{schema}"
+     if is_nil(type), do: raise "Field #{field} does not exists in #{schema}"
      value =
        case type do
          {:embed, %{related: related_schema}} ->
-          case raw_value do
-            {[]} -> []
-             _ -> raw_value |> ecto_process_doc(%{repo: repo, schema: related_schema, preloads: []})
-          end
-         {:array, _} ->
-          raise "Not implemented... yet"
+          raw_value |> ecto_process_doc(%{repo: repo, schema: related_schema, preloads: []})
+         {:array, :map} ->
+           raw_value |> identity_process_result
          :map ->
            raw_value |> identity_process_result
          _ ->

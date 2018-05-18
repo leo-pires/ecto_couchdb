@@ -635,6 +635,31 @@ defmodule RepoTest do
       assert pf.d == d
       assert is_nil(pf.f.t)
     end
+
+    defmodule G do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "G" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
+        field :x, {:array, :map}
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:x])
+      end
+    end
+    test "array of map" do
+      x = [
+        %{"a1" => "a", "b2" => ["b"], "c1" => [%{"foo" => 1, "goo" => 2}, %{"foo" => 3, "goo" => 4}], "d1" => %{"bar" => 3}, "f1" => []},
+        %{"a2" => "a", "b2" => ["b"], "c2" => [%{"foo" => 1, "goo" => 2}, %{"foo" => 3, "goo" => 4}], "d2" => %{"bar" => 3}, "f2" => []}
+      ]
+      {:ok, pc} = G.changeset(%G{}, %{x: x}) |> Repo.insert
+      pf = CouchdbAdapter.get(Repo, G, pc._id)
+      assert pf._id == pc._id
+      assert pf.x == x
+    end
   end
 
   describe "direct http calls" do
