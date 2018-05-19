@@ -11,23 +11,45 @@ defmodule RepoTest do
 
   setup do
     db = DatabaseCleaner.ensure_clean_db!(Repo)
-    design_docs = [%{
-                     _id: "_design/Post", language: "javascript",
-                     views: %{
-                       all: %{
-                         map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
-                       }
-                   }}, %{
-                     _id: "_design/User", language: "javascript",
-                     views: %{
-                       all: %{
-                         map: "function(doc) { if (doc.type === 'User') emit(doc._id, doc) }"
-                       },
-                       counts: %{
-                         map: "function(doc) { emit(doc._id, 1) }",
-                         reduce: "_count"
-                       }
-                   }}]
+    design_docs = [
+      %{
+        _id: "_design/Post",
+        language: "javascript",
+        views: %{
+          all: %{
+            map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
+          },
+          by_user_id: %{
+            map: "function(doc) { if (doc.type === 'Post' && doc.user_id) emit(doc.user_id, doc) }"
+          }
+        }
+      },
+      %{
+        _id: "_design/User",
+        language: "javascript",
+        views: %{
+          all: %{
+            map: "function(doc) { if (doc.type === 'User') emit(doc._id, doc) }"
+          },
+          counts: %{
+            map: "function(doc) { emit(doc._id, 1) }",
+            reduce: "_count"
+          }
+        }
+      },
+      %{
+        _id: "_design/UserData",
+        language: "javascript",
+        views: %{
+          all: %{
+            map: "function(doc) { if (doc.type === 'UserData') emit(doc.user_id, doc) }"
+          },
+          by_user_id: %{
+            map: "function(doc) { if (doc.type === 'UserData' && doc.user_id) emit(doc.user_id, doc) }"
+          }
+        }
+      }
+    ]
     docs = for i <- 1..3, do: %{_id: "id#{i}", title: "t#{i}", body: "b#{i}", type: "Post",
                                 stats: %{visits: i, time: 10*i},
                                 grants: [%{id: "1", user: "u#{i}.1", access: "a#{i}.1"},
@@ -464,6 +486,53 @@ defmodule RepoTest do
       assert not is_nil(CouchdbAdapter.get(Repo, A, pc._id, preload: :b))
       assert not is_nil(CouchdbAdapter.get(Repo, A, pc._id, preload: [b: :c]))
     end
+  end
+
+  describe "has_one support" do
+    setup(%{db: db, design_docs: design_docs, docs: docs}) do
+      DatabaseCleaner.ensure_clean_db!(Repo)
+      design_docs |> Enum.each(fn (design_doc) ->
+        :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
+      end)
+      Repo.insert! %User{_id: "test-user", username: "test", email: "test"}
+      :couchbeam.save_docs(db, Enum.map(docs, fn(doc) ->
+        CouchdbAdapter.to_doc(doc |> Map.put(:user_id, "test-user"))
+      end))
+      :ok
+    end
+
+    test "has_one supports cast_assoc" do
+      pc = Repo.insert! User.changeset_user_data(%User{}, %{_id: "u1", username: "foo", email: "goo", user_data: %{_id: "ud1", extra: "bar"}})
+      uf = CouchdbAdapter.get(Repo, User, "u1")
+      udf = CouchdbAdapter.get(Repo, UserData, "ud1")
+      assert pc._id == uf._id
+      assert pc.username == uf.username
+      assert pc.email == uf.email
+      assert udf._id == "ud1"
+      assert udf.user_id == pc._id
+      assert udf.extra == "bar"
+    end
+
+    test "get and fetch preloading has_one" do
+      pc = Repo.insert! User.changeset_user_data(%User{}, %{_id: "u1", username: "foo", email: "goo", user_data: %{_id: "ud1", extra: "bar"}})
+      udf = CouchdbAdapter.get(Repo, UserData, "ud1")
+      uf = CouchdbAdapter.get(Repo, User, "u1", preload: :user_data)
+      assert pc._id == uf._id
+      assert pc.username == uf.username
+      assert pc.email == uf.email
+      assert udf._id == "ud1"
+      assert udf.user_id == pc._id
+      assert udf.extra == "bar"
+      assert uf.user_data._id == udf._id
+      assert uf.user_data.user_id == udf.user_id
+      assert uf.user_data.extra == udf.extra
+    end
+
+    test "fetch_all" do
+      pf = CouchdbAdapter.get(Repo, User, "test-user", preload: :posts)
+      assert length(pf.posts) == 3
+    end
+
   end
 
   describe "changeset" do

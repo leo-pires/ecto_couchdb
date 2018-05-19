@@ -27,8 +27,7 @@ defmodule Post do
 
     def changeset(struct, params) do
       struct
-      |> Ecto.Changeset.cast(params, [:title, :body])
-      |> Ecto.Changeset.cast_assoc(:user)
+      |> Ecto.Changeset.cast(params, [:title, :body, :user_id])
     end
   end
 end

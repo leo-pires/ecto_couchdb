@@ -268,6 +268,7 @@ defmodule CouchdbAdapter do
       _ -> raise "Fetch returning more than one value"
     end
   end
+
   def fetch_all(repo, schema, view_name, options \\ []) do
     type = db_name(schema)
     view_name = view_name |> Atom.to_string
@@ -328,6 +329,26 @@ defmodule CouchdbAdapter do
               value = Map.get(map, fk)
               if value do
                 to_add = CouchdbAdapter.get(repo, related_schema, value) |> inject_preloads(repo, related_schema, preload_inject)
+                [{field, to_add} | acc]
+              else
+                acc
+              end
+            %Ecto.Association.Has{owner_key: fk, queryable: queryable, cardinality: cardinality, field: field} ->
+              {view_name, related_schema} =
+                case queryable do
+                  {view_name_str, related_schema} -> {view_name_str |> String.to_atom, related_schema}
+                  _ -> raise "Invalid queryable (#{inspect queryable}), should be (\"view_name\", schema)"
+                end
+              value = Map.get(map, fk)
+              if value do
+                to_add =
+                  case cardinality do
+                    :one ->
+                      CouchdbAdapter.fetch_one(repo, related_schema, view_name, key: value, include_docs: true) |> inject_preloads(repo, related_schema, preload_inject)
+                    :many ->
+                      CouchdbAdapter.fetch_all(repo, related_schema, view_name, key: value, include_docs: true)
+                      |> Enum.map(&(&1 |> inject_preloads(repo, related_schema, preload_inject)))
+                  end
                 [{field, to_add} | acc]
               else
                 acc
