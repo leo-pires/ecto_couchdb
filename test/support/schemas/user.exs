@@ -1,6 +1,5 @@
 defmodule User do
   use Ecto.Schema
-  use Couchdb.Design
 
   @primary_key false
   @foreign_key_type :binary_id
@@ -14,12 +13,6 @@ defmodule User do
     has_many :posts, {"by_user_id", Post}, references: :_id
     has_one :user_data, {"by_user_id", UserData}, references: :_id, foreign_key: :user_id
     timestamps()
-
-    designs do
-      design __MODULE__ do
-        view :all, [:string]
-      end
-    end
 
     def changeset(struct, params) do
       struct

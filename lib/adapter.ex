@@ -1,8 +1,4 @@
 defmodule CouchdbAdapter do
-  @moduledoc ~S"""
-  CouchdbAdapter provides an implementation of the `Ecto.Adapter` behaviour for the Couchdb
-  database.
-  """
   @behaviour Ecto.Adapter
 
   defmacro __before_compile__(_env), do: nil
@@ -151,13 +147,6 @@ defmodule CouchdbAdapter do
     {field_name, value}
   end
 
-  def prepare(:all, _) do
-    raise "Unsupported operation in CouchdbAdapter: all"
-  end
-  def prepare(:delete_all, _) do
-    raise "Unsupported operation in CouchdbAdapter: delete_all"
-  end
-
   def delete(repo, schema_meta, filters, options) do
     database = repo.config[:database]
     with server <- server_for(repo),
@@ -185,10 +174,6 @@ defmodule CouchdbAdapter do
     else
       {:error, reason} -> raise "Error while deleting (#{inspect(reason)})"
     end
-  end
-
-  def execute(_repo, _query_meta, _, _params, _preprocess, _options) do
-    raise "Unsupported operation in CouchdbAdapter: execute"
   end
 
   def update(repo, schema_meta, fields, filters, returning, options) do
@@ -239,21 +224,29 @@ defmodule CouchdbAdapter do
     end
   end
 
+  def prepare(_, _) do
+    raise "Unsupported operation in CouchdbAdapter: prepare"
+  end
+
+  def execute(_repo, _query_meta, _, _params, _preprocess, _options) do
+    raise "Unsupported operation in CouchdbAdapter: execute"
+  end
+
   defp inject_type(fields, type) when is_map(fields), do: fields |> Map.put(:type, type)
   defp inject_type(fields, type), do: [{:type, type} | fields]
 
   # Fetchers for Audo
 
-  alias CouchdbAdapter.{CouchbeamResultProcessor, HttpResultProcessor}
+  alias CouchdbAdapter.{HttpClient, CouchbeamResultProcessor, HttpResultProcessor}
 
   def get(repo, schema, id, options \\ []) do
     database = repo.config[:database]
-    preloads = Keyword.get(options, :preload, []) |> normalize_preloads
+    preloads = Keyword.get(options, :preload, [])
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
          {:ok, data} <- :couchbeam.open_doc(db, id)
     do
-      data |> CouchbeamResultProcessor.ecto_process_result(repo, schema, preloads)
+      data |> CouchdbAdapter.Processors.Helper.process_result(CouchbeamResultProcessor, repo, schema, preloads)
     else
       {:error, :not_found} -> nil
       {:error, {:error, reason}} -> raise inspect(reason)
@@ -273,12 +266,12 @@ defmodule CouchdbAdapter do
     type = db_name(schema)
     view_name = view_name |> Atom.to_string
     database = repo.config[:database]
-    preloads = Keyword.get(options, :preload, []) |> normalize_preloads
+    preloads = Keyword.get(options, :preload, [])
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
          {:ok, data} <- :couchbeam_view.fetch(db, {type, view_name}, options |> fetch_options_humanize)
     do
-      data |> CouchbeamResultProcessor.ecto_process_result(repo, schema, preloads)
+      data |> CouchdbAdapter.Processors.Helper.process_result(CouchbeamResultProcessor, repo, schema, preloads)
     else
       {:error, :not_found} -> raise "View not found (#{type}, #{view_name})"
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
@@ -289,93 +282,28 @@ defmodule CouchdbAdapter do
     fetch_keys = Keyword.get(options, :fetch_keys, false)
     ddoc = db_name(schema)
     url = "#{url_for(repo)}/_design/#{ddoc}/_view/#{view}"
-    with {:ok, data} <- url |> http_post(params),
-         result <- data |> process_result(HttpResultProcessor, repo, cast_to(schema, options), [], fetch_keys) do
+    schema_to_use =
+      if Keyword.get(options, :as_map, false) do
+        :map
+      else
+        schema
+      end
+    with {:ok, data} <- url |> HttpClient.post(params),
+         result <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema_to_use, [], fetch_keys)
+    do
       {:ok, result}
     end
   end
 
   def find(repo, schema, params, options \\ []) do
-    preloads = Keyword.get(options, :preload, []) |> normalize_preloads
+    preloads = Keyword.get(options, :preload, [])
     url = "#{url_for(repo)}/_find"
-    with {:ok, data} <- url |> http_post(params),
-         result <- data |> process_result(HttpResultProcessor, repo, schema, preloads) do
+    with {:ok, data} <- url |> HttpClient.post(params),
+         result <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema, preloads)
+    do
       {:ok, result}
     end
   end
-
-  # TODO: better api when using as_map and fetch_keys
-  defp process_result(data, processor, repo, schema, preloads) do
-    process_result(data, processor, repo, schema, preloads, false)
-  end
-  defp process_result(data, processor, _repo, :map, _preloads, false) do
-    data |> processor.identity_process_result(true)
-  end
-  defp process_result(data, processor, _repo, :map, _preloads, true) do
-    data |> processor.process_result_keys
-  end
-  defp process_result(data, processor, repo, schema, preloads, false) do
-    data |> processor.ecto_process_result(repo, schema, preloads)
-  end
-
-  def inject_preloads(map, _repo, _schema, [] = _preloads), do: map
-  def inject_preloads(nil, _repo, _schema, _preloads), do: nil
-  def inject_preloads(map, repo, schema, preloads) do
-    to_inject =
-      preloads
-      |> Enum.reduce([], fn ({preload_assoc, preload_inject}, acc) ->
-          case schema.__schema__(:association, preload_assoc) do
-            %Ecto.Association.BelongsTo{owner_key: fk, related: related_schema, field: field} ->
-              value = Map.get(map, fk)
-              if value do
-                to_add = CouchdbAdapter.get(repo, related_schema, value) |> inject_preloads(repo, related_schema, preload_inject)
-                [{field, to_add} | acc]
-              else
-                acc
-              end
-            %Ecto.Association.Has{owner_key: fk, queryable: queryable, cardinality: cardinality, field: field} ->
-              {view_name, related_schema} =
-                case queryable do
-                  {view_name_str, related_schema} -> {view_name_str |> String.to_atom, related_schema}
-                  _ -> raise "Invalid queryable (#{inspect queryable}), should be (\"view_name\", schema)"
-                end
-              value = Map.get(map, fk)
-              if value do
-                to_add =
-                  case cardinality do
-                    :one ->
-                      CouchdbAdapter.fetch_one(repo, related_schema, view_name, key: value, include_docs: true) |> inject_preloads(repo, related_schema, preload_inject)
-                    :many ->
-                      CouchdbAdapter.fetch_all(repo, related_schema, view_name, key: value, include_docs: true)
-                      |> Enum.map(&(&1 |> inject_preloads(repo, related_schema, preload_inject)))
-                  end
-                [{field, to_add} | acc]
-              else
-                acc
-              end
-            _ ->
-              raise "Unsupported preload type for #{preload_assoc}"
-          end
-        end)
-      |> Map.new
-    Map.merge(map, to_inject)
-  end
-
-  def normalize_preloads(f) when is_atom(f), do: [strict_normalize_preloads(f)]
-  def normalize_preloads(o), do: strict_normalize_preloads(o)
-  defp strict_normalize_preloads(f) when is_atom(f), do: {f, []}
-  defp strict_normalize_preloads({f, l}), do: {f, normalize_preloads(l)}
-  defp strict_normalize_preloads(l) when is_list(l), do: l |> Enum.map(&(strict_normalize_preloads(&1)))
-
-  defp http_post(url, params) do
-    url
-    |> HTTPoison.post(Poison.encode!(params), [{"Content-Type", "application/json; charset=utf-8"}])
-    |> http_process_response
-  end
-  defp http_process_response({:ok, %{body: body}}), do: http_process_response({:ok, Poison.decode!(body)})
-  defp http_process_response({:ok, %{"reason" => reason}}), do: {:error, "Could not fetch (#{reason})"}
-  defp http_process_response({:ok, map}) when is_map(map), do: {:ok, map}
-  defp http_process_response({:error, %{reason: reason}}), do: {:error, "Cound not fetch (#{reason})"}
 
   @bool_to_atom [:include_docs, :descending]
   defp fetch_options_humanize(options) do
@@ -385,13 +313,6 @@ defmodule CouchdbAdapter do
          ({opt, false}, acc) when opt in @bool_to_atom -> acc
          ({opt, value}, acc) -> [{opt, value} | acc]
        end)
-  end
-  defp cast_to(schema, options) do
-    if Keyword.get(options, :as_map, false) do
-      :map
-    else
-      schema
-    end
   end
 
 end

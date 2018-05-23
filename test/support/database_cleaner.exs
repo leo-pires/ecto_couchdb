@@ -9,10 +9,14 @@ defmodule DatabaseCleaner do
       end
     server = :couchbeam.server_connection(config[:hostname], config[:port], "", opts)
     database = config[:database]
-    if :couchbeam.db_exists(server, database) do
-      :couchbeam.delete_db(server, database)
+    try do
+      if :couchbeam.db_exists(server, database) do
+        :couchbeam.delete_db(server, database)
+      end
+      {:ok, db} = :couchbeam.create_db(server, database)
+      db
+    rescue
+      _ -> ensure_clean_db!(repo)
     end
-    {:ok, db} = :couchbeam.create_db(server, database)
-    db
   end
 end

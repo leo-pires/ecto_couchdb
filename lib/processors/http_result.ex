@@ -98,7 +98,7 @@ defmodule CouchdbAdapter.HttpResultProcessor do
   end
 
   def ecto_pp_fun(map, %{repo: repo, schema: schema, preloads: preloads}) do
-    Kernel.struct(schema, map |> CouchdbAdapter.inject_preloads(repo, schema, preloads))
+    Kernel.struct(schema, map |> CouchdbAdapter.Processors.Helper.inject_preloads(repo, schema, preloads))
   end
 
 end

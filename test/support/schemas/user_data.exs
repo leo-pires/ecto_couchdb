@@ -1,6 +1,5 @@
 defmodule UserData do
   use Ecto.Schema
-  use Couchdb.Design
 
   @primary_key false
   @foreign_key_type :binary_id

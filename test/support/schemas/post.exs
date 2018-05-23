@@ -1,6 +1,5 @@
 defmodule Post do
   use Ecto.Schema
-  use Couchdb.Design
 
   @primary_key false
   @foreign_key_type :binary_id
@@ -15,19 +14,14 @@ defmodule Post do
     embeds_one :stats, Stats, on_replace: :delete
     timestamps()
 
-    designs do
-      design __MODULE__ do
-        view :by_title, [:string]
-        view :all, [:string]
-      end
-      design "secondary" do
-        view :by_other, [:string]
-      end
-    end
-
     def changeset(struct, params) do
       struct
       |> Ecto.Changeset.cast(params, [:title, :body, :user_id])
+    end
+    def changeset_user(struct, params) do
+      struct
+      |> Ecto.Changeset.cast(params, [:title, :body])
+      |> Ecto.Changeset.cast_assoc(:user)
     end
   end
 end

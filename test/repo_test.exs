@@ -206,7 +206,6 @@ defmodule RepoTest do
 
     defmodule Other do
       use Ecto.Schema
-      use Couchdb.Design
       @primary_key false
 
       schema "posts" do
@@ -395,7 +394,6 @@ defmodule RepoTest do
 
     defmodule D do
       use Ecto.Schema
-      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "D" do
@@ -410,7 +408,6 @@ defmodule RepoTest do
     end
     defmodule C do
       use Ecto.Schema
-      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "C" do
@@ -426,7 +423,6 @@ defmodule RepoTest do
     end
     defmodule B do
       use Ecto.Schema
-      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "B" do
@@ -442,7 +438,6 @@ defmodule RepoTest do
     end
     defmodule A do
       use Ecto.Schema
-      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "A" do
@@ -458,14 +453,14 @@ defmodule RepoTest do
     end
 
     test "normalize_preloads" do
-      assert CouchdbAdapter.normalize_preloads(:b) == [b: []]
-      assert CouchdbAdapter.normalize_preloads([:b]) == [b: []]
-      assert CouchdbAdapter.normalize_preloads([b: [c: :d]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.normalize_preloads([b: [:c, :d]]) == [b: [c: [], d: []]]
-      assert CouchdbAdapter.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.normalize_preloads([b: [c: [:d, :e]]]) == [b: [c: [d: [], e: []]]]
-      assert CouchdbAdapter.normalize_preloads([b: [c: [:d, :e]], f: :g]) == [b: [c: [d: [], e: []]], f: [g: []]]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads(:b) == [b: []]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads([:b]) == [b: []]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: :d]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [:c, :d]]) == [b: [c: [], d: []]]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d, :e]]]) == [b: [c: [d: [], e: []]]]
+      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d, :e]], f: :g]) == [b: [c: [d: [], e: []]], f: [g: []]]
     end
 
     test "get chaining" do
@@ -490,7 +485,6 @@ defmodule RepoTest do
 
   describe "has_one support" do
     setup(%{db: db, design_docs: design_docs, docs: docs}) do
-      DatabaseCleaner.ensure_clean_db!(Repo)
       design_docs |> Enum.each(fn (design_doc) ->
         :couchbeam.save_doc(db, design_doc |> CouchdbAdapter.to_doc)
       end)
@@ -576,7 +570,7 @@ defmodule RepoTest do
 
     test "cast_assoc" do
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 0
-      {:ok, inserted} = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}}) |> Repo.insert
+      {:ok, inserted} = Post.changeset_user(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}}) |> Repo.insert
       assert inserted.user_id == inserted.user._id
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
     end
@@ -596,7 +590,6 @@ defmodule RepoTest do
 
     defmodule Foo do
       use Ecto.Schema
-      use Couchdb.Design
       @primary_key false
       @foreign_key_type :binary_id
       schema "Foo" do
@@ -613,7 +606,7 @@ defmodule RepoTest do
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
       pc = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id2", username: "alice", password: "alice@gmail.com"}}) |> Repo.insert!
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
-      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
+      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
       pf = CouchdbAdapter.get(Repo, Post, pc._id)
       assert not is_nil(pf)
       Repo.update! Post.changeset(pf, %{title: "new lorem", body: "new lorem ipsum"})
@@ -623,11 +616,11 @@ defmodule RepoTest do
       assert pu.title == "new lorem"
       assert pu.body == "new lorem ipsum"
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
-      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
+      assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 1
     end
 
     test "update including association from get" do
-      pc = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id3", username: "john", password: "john@gmail.com"}}) |> Repo.insert!
+      pc = Post.changeset_user(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id3", username: "john", email: "john@gmail.com"}}) |> Repo.insert!
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
       pf1 = CouchdbAdapter.get(Repo, Post, pc._id, preload: :user)
@@ -635,10 +628,18 @@ defmodule RepoTest do
       assert pf1.user_id == pc.user._id
       assert pf1.user_id == pf1.user._id
       assert pf1._rev == pc._rev
-      pu = Repo.update! Post.changeset(pf1, %{title: "new lorem", body: "new lorem ipsum", user: %{username: "doe", email: "doe@gmail.com"}})
+      assert pf1.title == "lorem"
+      assert pf1.body == "lorem ipsum"
+      assert pf1.user._id == "test-user-id3"
+      assert pf1.user.username == "john"
+      assert pf1.user.email == "john@gmail.com"
+      pu = Repo.update! Post.changeset_user(pf1, %{title: "new lorem", body: "new lorem ipsum", user: %{username: "doe", email: "doe@gmail.com"}})
       assert length(CouchdbAdapter.fetch_all(Repo, Post, :all)) == 4
       assert length(CouchdbAdapter.fetch_all(Repo, User, :all)) == 2
       pf2 = CouchdbAdapter.get(Repo, Post, pc._id, preload: :user)
+      assert pf2.user_id == pc.user._id
+      assert pf2.user_id == pf1.user._id
+      assert pf2._rev != pf1._rev
       assert pu.user_id == pu.user._id
       assert pu.user_id == pf2.user_id
       assert pu.user._id == pf2.user._id
