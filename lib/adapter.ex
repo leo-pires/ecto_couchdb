@@ -1,5 +1,6 @@
 defmodule CouchdbAdapter do
   @behaviour Ecto.Adapter
+  @behaviour Ecto.Adapter.Storage
 
   defmacro __before_compile__(_env), do: nil
 
@@ -47,8 +48,7 @@ defmodule CouchdbAdapter do
 
   # Returns the server connection to use with the given repo
   # TODO: reuse url_for
-  defp url_for(repo) do
-    config = repo.config
+  def url_for(config) when is_list(config) do
     protocol = Keyword.get(config, :protocol, "http")
     hostname = Keyword.get(config, :hostname, "localhost")
     port = Keyword.get(config, :port, 5984)
@@ -61,7 +61,8 @@ defmodule CouchdbAdapter do
       "#{protocol}://#{hostname}:#{port}/#{database}"
     end
   end
-  defp server_for(repo) do
+  def url_for(repo), do: url_for(repo.config)
+  def server_for(repo) do
     config = repo.config
     protocol = Keyword.get(config, :protocol, "http")
     hostname = Keyword.get(config, :hostname, "localhost")
@@ -288,7 +289,7 @@ defmodule CouchdbAdapter do
       else
         schema
       end
-    with {:ok, data} <- url |> HttpClient.post(params),
+    with {:ok, {_, data}} <- url |> HttpClient.post(params),
          result <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema_to_use, [], fetch_keys)
     do
       {:ok, result}
@@ -298,7 +299,7 @@ defmodule CouchdbAdapter do
   def find(repo, schema, params, options \\ []) do
     preloads = Keyword.get(options, :preload, [])
     url = "#{url_for(repo)}/_find"
-    with {:ok, data} <- url |> HttpClient.post(params),
+    with {:ok, {_, data}} <- url |> HttpClient.post(params),
          result <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema, preloads)
     do
       {:ok, result}
@@ -313,6 +314,23 @@ defmodule CouchdbAdapter do
          ({opt, false}, acc) when opt in @bool_to_atom -> acc
          ({opt, value}, acc) -> [{opt, value} | acc]
        end)
+  end
+
+  # Storage
+
+  def storage_up(options) do
+    case CouchdbAdapter.Storage.create_db(options) do
+      {:ok, true} -> :ok
+      {:ok, false} -> {:error, :already_down}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+  def storage_down(options) do
+    case CouchdbAdapter.Storage.delete_db(options) do
+      {:ok, true} -> :ok
+      {:ok, false} -> {:error, :already_up}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
 end
