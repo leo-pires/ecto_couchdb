@@ -329,6 +329,7 @@ defmodule CouchdbAdapter do
   # Storage
 
   def storage_up(options) do
+    Application.ensure_all_started(:hackney)
     case CouchdbAdapter.Storage.create_db(options) do
       {:ok, true} -> :ok
       {:ok, false} -> {:error, :already_down}
@@ -336,6 +337,7 @@ defmodule CouchdbAdapter do
     end
   end
   def storage_down(options) do
+    Application.ensure_all_started(:hackney)
     case CouchdbAdapter.Storage.delete_db(options) do
       {:ok, true} -> :ok
       {:ok, false} -> {:error, :already_up}
