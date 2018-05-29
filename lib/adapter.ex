@@ -300,8 +300,18 @@ defmodule CouchdbAdapter do
     preloads = Keyword.get(options, :preload, [])
     url = "#{url_for(repo)}/_find"
     with {:ok, {_, data}} <- url |> HttpClient.post(params),
-         result <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema, preloads)
+         docs <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema, preloads)
     do
+      bookmark = data |> Map.get("bookmark")
+      warning = data |> Map.get("warning")
+      result = %{
+        bookmark: bookmark,
+        docs: docs
+      }
+      result =
+        if warning do
+          result |> Map.put(:warning, warning)
+        end
       {:ok, result}
     end
   end
