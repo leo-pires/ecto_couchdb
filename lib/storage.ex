@@ -23,11 +23,10 @@ defmodule CouchdbAdapter.Storage do
     end
   end
 
-  def create_ddoc(options, data) do
-    ddoc = Map.get(data, :_id) || Map.get(data, "_id")
+  def create_ddoc(options, ddoc, code) do
     if valid_ddoc_name?(ddoc) do
       "#{CouchdbAdapter.url_for(options)}/#{ddoc}"
-      |> HttpClient.put(data)
+      |> HttpClient.put(code)
       |> process_response("create design doc")
     else
       {:error, "Design doc id not present"}

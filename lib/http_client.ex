@@ -1,7 +1,13 @@
 defmodule CouchdbAdapter.HttpClient do
 
-  def request(method, url, body \\ %{}, headers \\ [{"Content-Type", "application/json; charset=utf-8"}], options \\ []) do
-    HTTPoison.request(method, url, Poison.encode!(body), headers, options)
+  def request(method, url, body) when is_map(body) do
+    request(method, url, Poison.encode!(body), [{"Content-Type", "application/json; charset=utf-8"}], [])
+  end
+  def request(method, url, body) do
+    request(method, url, body, [{"Content-Type", "application/json; charset=utf-8"}], [])
+  end
+  def request(method, url, body, headers, options) do
+    HTTPoison.request(method, url, body, headers, options)
     |> process_response
   end
 

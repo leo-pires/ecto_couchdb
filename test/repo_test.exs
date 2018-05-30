@@ -112,7 +112,7 @@ defmodule RepoTest do
 
     test "create design doc", %{config_wrapper: config_wrapper} do
       ddoc = "_design/TestPost"
-      schema = %{
+      code = %{
         _id: ddoc,
         language: "javascript",
         views: %{
@@ -120,12 +120,12 @@ defmodule RepoTest do
             map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
           }
         }
-      }
-      assert {:ok, true} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, schema)
+      } |> Poison.encode!
+      assert {:ok, true} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, ddoc, code)
     end
 
     test "doesnt create invalid design doc", %{config_wrapper: config_wrapper} do
-      assert {:error, _} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, %{})
+      assert {:error, _} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, "", %{})
     end
 
     test "create index", %{config_wrapper: config_wrapper} do
