@@ -415,6 +415,14 @@ defmodule RepoTest do
       assert pf.user.email == "john@gmail.com"
     end
 
+    test "get as map" do
+      u = CouchdbAdapter.get(Repo, :map, "test-user-id0")
+      assert u |> Map.get("_id") == "test-user-id0"
+      assert not is_nil(u |> Map.get("_rev"))
+      assert u |> Map.get("username") == "bob"
+      assert u |> Map.get("email") == "bob@gmail.com"
+    end
+
     test "get return nil if not found" do
       assert is_nil(CouchdbAdapter.get(Repo, Post, "xpto"))
     end

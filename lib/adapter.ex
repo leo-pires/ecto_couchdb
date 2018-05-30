@@ -240,6 +240,17 @@ defmodule CouchdbAdapter do
 
   alias CouchdbAdapter.{HttpClient, CouchbeamResultProcessor, HttpResultProcessor}
 
+  def get(repo, :map, id) do
+    url = "#{url_for(repo)}/#{id}"
+    with {:ok, {_, data}} <- url |> HttpClient.get,
+         result <- data |> HttpResultProcessor.identity_process_result
+    do
+      result
+    else
+      {:error, _} -> nil
+    end
+  end
+
   def get(repo, schema, id, options \\ []) do
     database = repo.config[:database]
     preloads = Keyword.get(options, :preload, [])
