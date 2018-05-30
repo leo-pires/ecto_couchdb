@@ -24,13 +24,9 @@ defmodule CouchdbAdapter.Storage do
   end
 
   def create_ddoc(options, ddoc, code) do
-    if valid_ddoc_name?(ddoc) do
-      "#{CouchdbAdapter.url_for(options)}/#{ddoc}"
-      |> HttpClient.put(code)
-      |> process_response("create design doc")
-    else
-      {:error, "Design doc id not present"}
-    end
+    "#{CouchdbAdapter.url_for(options)}/_design/#{ddoc}"
+    |> HttpClient.put(code)
+    |> process_response("create design doc")
   end
 
   def create_index(options, data) do
@@ -39,8 +35,6 @@ defmodule CouchdbAdapter.Storage do
     |> process_response("create index")
   end
 
-
-  defp valid_ddoc_name?(ddoc), do: ddoc && ddoc =~ ~r/^_design\/(.+)$/
 
   defp process_response({:ok, {code, _}}, _action) when div(code, 100) == 2, do: {:ok, true}
   defp process_response({:ok, {code, %{reason: reason}}}, action), do: {:error, "Could not #{action} (#{code} - #{reason})"}
