@@ -322,6 +322,8 @@ defmodule CouchdbAdapter do
       result =
         if warning do
           result |> Map.put(:warning, warning)
+        else
+          result
         end
       {:ok, result}
     end
