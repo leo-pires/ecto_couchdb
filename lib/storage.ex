@@ -2,6 +2,24 @@ defmodule CouchdbAdapter.Storage do
 
   alias CouchdbAdapter.HttpClient
 
+  def storage_up(options) do
+    Application.ensure_all_started(:hackney)
+    case CouchdbAdapter.Storage.create_db(options) do
+      {:ok, true} -> :ok
+      {:ok, false} -> {:error, :already_down}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+  def storage_down(options) do
+    Application.ensure_all_started(:hackney)
+    case CouchdbAdapter.Storage.delete_db(options) do
+      {:ok, true} -> :ok
+      {:ok, false} -> {:error, :already_up}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+
   def db_exists?(options) do
     case CouchdbAdapter.url_for(options) |> HttpClient.head do
       {:ok, {404, _}} -> {:ok, false}
