@@ -1,33 +1,29 @@
 defmodule CouchdbAdapter.Fetchers do
 
-  alias CouchdbAdapter.{HttpClient, CouchbeamResultProcessor, HttpResultProcessor}
+  alias CouchdbAdapter.{HttpClient, CouchbeamResultProcessor, HttpResultProcessor, TempResultProcessor}
 
   def get(repo, schema, id) do
     get(repo, schema, id, [])
   end
 
   def get(repo, :map, id, _options) do
-    url = "#{CouchdbAdapter.url_for(repo)}/#{id}"
-    with {:ok, {_, data}} <- url |> HttpClient.get,
-         result <- data |> HttpResultProcessor.identity_process_result
-    do
-      result
+    with db_props <- CouchdbAdapter.db_props_for(repo),
+         {:ok, data} <- Couchdb.Connector.get(db_props, id) do
+      data
     else
       {:error, _} -> nil
     end
   end
 
   def get(repo, schema, id, options) do
-    database = repo.config[:database]
     preloads = Keyword.get(options, :preload, [])
-    with server <- CouchdbAdapter.server_for(repo),
-         {:ok, db} <- :couchbeam.open_db(server, database),
-         {:ok, data} <- :couchbeam.open_doc(db, id)
+    with db_props <- CouchdbAdapter.db_props_for(repo),
+         {:ok, data} <- Couchdb.Connector.get(db_props, id)
     do
-      data |> CouchdbAdapter.Processors.Helper.process_result(CouchbeamResultProcessor, repo, schema, preloads)
+      data |> CouchdbAdapter.Processors.Helper.process_result(TempResultProcessor, repo, schema, preloads)
     else
-      {:error, :not_found} -> nil
-      {:error, {:error, reason}} -> raise inspect(reason)
+      {:error, %{"error" => "not_found", "reason" => "missing"}} -> nil
+      {:error, reason} -> raise "Could not get (#{inspect(reason)})"
     end
   end
 

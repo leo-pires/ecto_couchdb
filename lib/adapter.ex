@@ -8,23 +8,13 @@ defmodule CouchdbAdapter do
   def autogenerate(:embed_id),  do: Ecto.UUID.generate()
   def autogenerate(:binary_id), do: nil
 
-  def loaders({:embed, _} = type, _), do: [&load_embed(type, &1)]
   def loaders(:naive_datetime, type), do: [&load_datetime/1, type]
   def loaders(:date, type), do: [&load_date/1, type]
   def loaders(:time, type), do: [&load_time/1, type]
   def loaders(_, type), do: [type]
-  defp load_embed({:embed, %{related: related, cardinality: :one}}, value) do
-    {:ok, struct(related, atomize_keys(value))}
-  end
-  defp load_embed({:embed, %{related: related, cardinality: :many}}, values) do
-    {:ok, Enum.map(values, &struct(related, atomize_keys(&1)))}
-  end
   defp load_datetime(datetime), do: {:ok, NaiveDateTime.from_iso8601!(datetime) |> NaiveDateTime.to_erl}
   defp load_date(date), do: date |> Date.from_iso8601
   defp load_time(time), do: time |> Time.from_iso8601
-
-  defp atomize_keys({map}), do: atomize_keys(map)
-  defp atomize_keys(map), do: for {k, v} <- map, do: {String.to_atom(k), v}
 
   def dumpers(:naive_datetime, type), do: [type, &dump_naive_datetime/1]
   def dumpers(:date, type), do: [type, &dump_date/1]
@@ -107,7 +97,7 @@ defmodule CouchdbAdapter do
          {:ok, db} <- :couchbeam.open_db(server, database),
          {:ok, doc} <- fetch_for_update(db, filters),
          doc <- Enum.reduce(fields |> inject_type(type), doc,
-                            fn({key, value}, accum) ->
+                            fn ({key, value}, accum) ->
                               :couchbeam_doc.set_value(to_string(key), to_doc_value(value), accum)
                             end),
          {:ok, doc} <- :couchbeam.save_doc(db, doc)
@@ -178,6 +168,21 @@ defmodule CouchdbAdapter do
     server_url = "#{protocol}://#{hostname}:#{port}"
     :couchbeam.server_connection(server_url, options)
   end
+  def db_props_for(repo) do
+    config = repo.config
+    protocol = Keyword.get(config, :protocol, "http")
+    hostname = Keyword.get(config, :hostname, "localhost")
+    port = Keyword.get(config, :port, 5984)
+    database = Keyword.get(config, :database)
+    username = Keyword.get(config, :username)
+    password = Keyword.get(config, :password)
+    props = %{protocol: protocol, hostname: hostname, port: port, database: database}
+    if username && password do
+      props |> Map.merge(%{username: username, password: password})
+    else
+      props
+    end
+  end
 
   def ensure_all_started(_repo, type) do
     Application.ensure_all_started(:couchbeam, type)
@@ -195,6 +200,7 @@ defmodule CouchdbAdapter do
     end
     {kv_list}
   end
+  defp to_doc_value([]), do: []
   defp to_doc_value(list) when is_list(list) do
     values = for i <- list, do: to_doc_value(i)
     {values}
