@@ -31,7 +31,7 @@ defmodule CouchdbAdapter.Mixfile do
   defp deps do
     [
       {:ecto, "~> 2.1.0"},
-      {:couchdb_connector, github: "leo-pires/couchdb_connector"},      
+      {:couchdb_connector, github: "leo-pires/couchdb_connector", branch: "audo"},
       {:couchbeam_amuino, "~> 1.4.3-amuino.8"},
       {:httpoison, "~> 0.13"},
       {:mix_test_watch, "~> 0.2.6", only: :dev, runtime: false},

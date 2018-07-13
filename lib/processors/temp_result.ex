@@ -1,5 +1,8 @@
 defmodule CouchdbAdapter.TempResultProcessor do
 
+  def process_result(%{"rows" => rows}, cast_fun, pp_fun, payload) when is_list(rows) do
+    process_result_fetch_all(rows, cast_fun, pp_fun, payload)
+  end
   def process_result(%{"results" => rows}, cast_fun, pp_fun, payload) when is_list(rows) do
     rows
     |> Enum.map(fn (%{"rows" => rows} when is_list(rows)) ->
@@ -18,6 +21,12 @@ defmodule CouchdbAdapter.TempResultProcessor do
   def process_result(map, cast_fun, pp_fun, payload) when is_map(map) do
     map |> process_doc(cast_fun, pp_fun, payload)
   end
+
+  def process_result_fetch_all(rows, cast_fun, pp_fun, payload) do
+    rows
+    |> Enum.map(fn (%{"value" => doc}) -> doc |> process_doc(cast_fun, pp_fun, payload) end)
+  end
+
   def process_result_map(map, _cast_fun, _pp_fun, _payload) when is_map(map) do
     map
   end
