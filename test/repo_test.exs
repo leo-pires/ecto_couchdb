@@ -416,7 +416,15 @@ defmodule RepoTest do
     end
 
     test "get as map" do
-      u = CouchdbAdapter.get(Repo, :map, "test-user-id0")
+      u = CouchdbAdapter.get(Repo, User, "test-user-id0", as_map: true)
+      assert u |> Map.get(:_id) == "test-user-id0"
+      assert not is_nil(u |> Map.get(:_rev))
+      assert u |> Map.get(:username) == "bob"
+      assert u |> Map.get(:email) == "bob@gmail.com"
+    end
+
+    test "get as raw map" do
+      u = CouchdbAdapter.get(Repo, User, "test-user-id0", as_map: :raw)
       assert u |> Map.get("_id") == "test-user-id0"
       assert not is_nil(u |> Map.get("_rev"))
       assert u |> Map.get("username") == "bob"
@@ -543,17 +551,17 @@ defmodule RepoTest do
     end
 
     test "normalize_preloads" do
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads(:b) == [b: []]
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads([:b]) == [b: []]
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: :d]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [:c, :d]]) == [b: [c: [], d: []]]
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d, :e]]]) == [b: [c: [d: [], e: []]]]
-      assert CouchdbAdapter.Processors.Helper.normalize_preloads([b: [c: [:d, :e]], f: :g]) == [b: [c: [d: [], e: []]], f: [g: []]]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads(:b) == [b: []]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads([:b]) == [b: []]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: :d]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [:c, :d]]) == [b: [c: [], d: []]]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d, :e]]]) == [b: [c: [d: [], e: []]]]
+      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d, :e]], f: :g]) == [b: [c: [d: [], e: []]], f: [g: []]]
     end
 
-    test "get chaining" do
+    test "get preload" do
       pc = Repo.insert! A.changeset(%A{}, %{title: "a", b: %{title: "b", c: %{title: "c", d: %{title: "d"}}}})
       a1 = CouchdbAdapter.get(Repo, A, pc._id, preload: [b: :c])
       assert a1.title == "a"
@@ -612,7 +620,7 @@ defmodule RepoTest do
       assert uf.user_data.extra == udf.extra
     end
 
-    test "fetch_all" do
+    test "get and fetch preloading has_many" do
       pf = CouchdbAdapter.get(Repo, User, "test-user", preload: :posts)
       assert length(pf.posts) == 3
     end
@@ -837,7 +845,7 @@ defmodule RepoTest do
     end
 
     test "multiple_fetch_all works for Ecto schema" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, %{queries: [%{key: "test-user-id1"}, %{key: "test-user-id2"}]})
+      list = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}])
       a = list |> Enum.at(0) |> Enum.at(0)
       b = list |> Enum.at(1) |> Enum.at(0)
       assert a.__struct__ == User
@@ -851,7 +859,7 @@ defmodule RepoTest do
     end
 
     test "multiple_fetch_all works for map" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, %{queries: [%{key: "test-user-id1"}, %{key: "test-user-id2"}]}, as_map: true)
+      list = CouchdbAdapter.multiple_fetch_all(Repo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}], as_map: true)
       a = list |> Enum.at(0) |> Enum.at(0)
       b = list |> Enum.at(1) |> Enum.at(0)
       assert is_nil(Map.get(a, :__struct__))
@@ -865,14 +873,13 @@ defmodule RepoTest do
     end
 
     test "multiple_fetch_all group_level 0" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, %{queries: [%{group_level: 0}]}, as_map: true)
-      v = list |> Enum.at(0) |> Enum.at(0)
-      assert v == 6
+      list = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, [%{group_level: 0}], as_map: true)
+      assert list == [[6]]
     end
 
-    test "multiple_fetch_all with fetch_keys" do
-      {:ok, list} = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, %{queries: [%{group_level: 0}]}, as_map: true, fetch_keys: true)
-      assert list == [[nil]]
+    test "multiple_fetch_all with return_keys" do
+      list = CouchdbAdapter.multiple_fetch_all(Repo, User, :counts, [%{group_level: 0}], as_map: true, return_keys: true)
+      assert list == [[{nil, 6}]]
     end
 
     test "find" do

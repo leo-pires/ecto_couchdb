@@ -4,9 +4,17 @@ defmodule CouchdbAdapter do
 
   defmacro __before_compile__(_env), do: nil
 
+  def child_spec(repo, _options) do
+    :hackney_pool.child_spec(repo, pool_config(repo.config))
+  end
+
+  def ensure_all_started(_repo, type) do
+    Application.ensure_all_started(:couchbeam, type)
+  end
+
   def autogenerate(:id),        do: nil
-  def autogenerate(:embed_id),  do: Ecto.UUID.generate()
   def autogenerate(:binary_id), do: nil
+  def autogenerate(:embed_id),  do: Ecto.UUID.generate()
 
   def loaders(:naive_datetime, type), do: [&load_datetime/1, type]
   def loaders(:date, type), do: [&load_date/1, type]
@@ -23,10 +31,6 @@ defmodule CouchdbAdapter do
   defp dump_naive_datetime({{_, _, _} = dt, {h, m, s, ms}}), do: {:ok, {dt, {h, m, s}} |> NaiveDateTime.from_erl!({ms, 6}) |> NaiveDateTime.to_iso8601}
   defp dump_date(date), do: {:ok, date |> Date.from_erl! |> Date.to_iso8601}
   defp dump_time({h, m, s, ms}), do: {:ok, {h, m, s} |> Time.from_erl!({ms, 0}) |> Time.to_iso8601}
-
-  def child_spec(repo, _options) do
-    :hackney_pool.child_spec(repo, pool_config(repo.config))
-  end
 
   def insert(repo, meta, fields, _on_conflict, returning, _options) do
     type = db_name(meta)
@@ -184,11 +188,8 @@ defmodule CouchdbAdapter do
     end
   end
 
-  def ensure_all_started(_repo, type) do
-    Application.ensure_all_started(:couchbeam, type)
-  end
-
   @spec db_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
+  # TODO: rename to ddoc_name
   def db_name(%{schema: schema}), do: schema.__schema__(:source)
   def db_name(%{sources: {{db_name, _}}}), do: db_name
   def db_name(module), do: module.__schema__(:source)
@@ -251,8 +252,8 @@ defmodule CouchdbAdapter do
   defdelegate fetch_one(repo, schema, view_name, options), to: CouchdbAdapter.Fetchers
   defdelegate fetch_all(repo, schema, view_name), to: CouchdbAdapter.Fetchers
   defdelegate fetch_all(repo, schema, view_name, options), to: CouchdbAdapter.Fetchers
-  defdelegate multiple_fetch_all(repo, schema, view, params), to: CouchdbAdapter.Fetchers
-  defdelegate multiple_fetch_all(repo, schema, view, params, options), to: CouchdbAdapter.Fetchers
+  defdelegate multiple_fetch_all(repo, schema, view_name, queries), to: CouchdbAdapter.Fetchers
+  defdelegate multiple_fetch_all(repo, schema, view_name, queries, options), to: CouchdbAdapter.Fetchers
   defdelegate find(repo, schema, params), to: CouchdbAdapter.Fetchers
   defdelegate find(repo, schema, params, options), to: CouchdbAdapter.Fetchers
 

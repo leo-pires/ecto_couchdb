@@ -1,34 +1,35 @@
+# TODO: create type for raise
+
 defmodule CouchdbAdapter.Fetchers do
 
-  alias CouchdbAdapter.{HttpClient, HttpResultProcessor, TempResultProcessor}
+  alias CouchdbAdapter.ResultProcessor
 
+  @type preload :: atom() | [atom()] | keyword(preload)
+  @type get_options :: [preload: preload]
+  @type fetch_options :: [preload: preload, return_keys: boolean(), as_map: (boolean() | :raw)]
+  @type find_options :: [preload: preload, as_map: boolean()]
+
+  @spec get(Ecto.Repo.t, Ecto.Schema.t, String.t) :: Ecto.Schema.t() | nil | no_return()
   def get(repo, schema, id) do
     get(repo, schema, id, [])
   end
 
-  def get(repo, :map, id, _options) do
-    with db_props <- CouchdbAdapter.db_props_for(repo),
-         {:ok, data} <- Couchdb.Connector.get(db_props, id) do
-      data
-    else
-      {:error, _} -> nil
-    end
-  end
-
-  def get(repo, schema, id, options) do
-    preloads = Keyword.get(options, :preload, [])
+  @spec get(Ecto.Repo.t, Ecto.Schema.t, String.t, get_options) :: Ecto.Schema.t() | nil | no_return()
+  def get(repo, schema, id, opts) do
+    {processor_opts, _} = opts |> split_fetch_options
     with db_props <- CouchdbAdapter.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.get(db_props, id)
     do
-      data |> CouchdbAdapter.Processors.Helper.process_result(TempResultProcessor, repo, schema, preloads)
+      ResultProcessor.process_result(:get, data, repo, schema, processor_opts)
     else
       {:error, %{"error" => "not_found", "reason" => "missing"}} -> nil
       {:error, reason} -> raise "Could not get (#{inspect(reason)})"
     end
   end
 
-  def fetch_one(repo, schema, view_name, options \\ []) do
-    case fetch_all(repo, schema, view_name, options) do
+  @spec fetch_one(Ecto.Repo.t, Ecto.Schema.t, atom(), fetch_options) :: term()
+  def fetch_one(repo, schema, view_name, opts \\ []) do
+    case fetch_all(repo, schema, view_name, opts) do
       {:error, error} -> {:error, error}
       data when length(data) == 1 -> hd(data)
       data when length(data) == 0 -> nil
@@ -36,57 +37,49 @@ defmodule CouchdbAdapter.Fetchers do
     end
   end
 
+  @spec fetch_all(Ecto.Repo.t, Ecto.Schema.t, atom(), fetch_options) :: term()
   def fetch_all(repo, schema, view_name, opts \\ []) do
+    {processor_opts, query} = opts |> split_fetch_options
+    query = query |> Enum.into(%{})
     ddoc = CouchdbAdapter.db_name(schema)
-    preloads = Keyword.get(opts, :preload, [])
-    query = Keyword.delete(opts, :preload) |> Enum.into(%{})
     with db_props <- CouchdbAdapter.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, query)
     do
-      data |> CouchdbAdapter.Processors.Helper.process_result(TempResultProcessor, repo, schema, preloads)
+      ResultProcessor.process_result(:fetch_all, data, repo, schema, processor_opts)
     else
       {:error, %{"error" => "not_found", "reason" => "missing_named_view"}} -> raise "View not found (#{ddoc}, #{view_name})"
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
 
-  def multiple_fetch_all(repo, schema, view, params, options \\ []) do
-    fetch_keys = Keyword.get(options, :fetch_keys, false)
+  @spec multiple_fetch_all(Ecto.Repo.t, Ecto.Schema.t, atom(), [map(), ...], fetch_options) :: {:ok, term()}
+  def multiple_fetch_all(repo, schema, view_name, queries, opts \\ []) do
+    {processor_opts, _} = opts |> split_fetch_options
     ddoc = CouchdbAdapter.db_name(schema)
-    url = "#{CouchdbAdapter.url_for(repo)}/_design/#{ddoc}/_view/#{view}"
-    schema_to_use =
-      if Keyword.get(options, :as_map, false) do
-        :map
-      else
-        schema
-      end
-    with {:ok, {_, data}} <- url |> HttpClient.post(params),
-         result <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema_to_use, [], fetch_keys)
+    with db_props <- CouchdbAdapter.db_props_for(repo),
+         {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, queries)
     do
-      {:ok, result}
+      ResultProcessor.process_result(:multiple_fetch_all, data, repo, schema, processor_opts)
+    else
+      # TODO: check error for multiple fetch all!
+      {:error, %{"error" => "not_found", "reason" => "missing_named_view"}} -> raise "View not found (#{ddoc}, #{view_name})"
+      {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end
 
-  def find(repo, schema, params, options \\ []) do
-    preloads = Keyword.get(options, :preload, [])
-    url = "#{CouchdbAdapter.url_for(repo)}/_find"
-    with {:ok, {_, data}} <- url |> HttpClient.post(params),
-         docs <- data |> CouchdbAdapter.Processors.Helper.process_result(HttpResultProcessor, repo, schema, preloads)
+  @spec find(Ecto.Repo.t, Ecto.Schema.t, map(), find_options) :: term()
+  def find(repo, schema, query, opts \\ []) do
+    {processor_opts, _} = opts |> split_fetch_options
+    with db_props <- CouchdbAdapter.db_props_for(repo),
+         {:ok, data} <- Couchdb.Connector.find(db_props, query)
     do
-      bookmark = data |> Map.get("bookmark")
-      warning = data |> Map.get("warning")
-      result = %{
-        bookmark: bookmark,
-        docs: docs
-      }
-      result =
-        if warning do
-          result |> Map.put(:warning, warning)
-        else
-          result
-        end
-      {:ok, result}
+      {:ok, ResultProcessor.process_result(:find, data, repo, schema, processor_opts)}
+    else
+      # TODO: check error for find!
+      error -> error
     end
   end
+
+  defp split_fetch_options(opts), do: opts |> Keyword.split([:preload, :as_map, :return_keys])
 
 end
