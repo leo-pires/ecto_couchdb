@@ -33,8 +33,6 @@ defmodule CouchdbAdapter.Mixfile do
       {:ecto, "~> 2.1.0"},
       {:couchdb_connector, github: "leo-pires/couchdb_connector", branch: "audo"},
       {:couchbeam_amuino, "~> 1.4.3-amuino.8"},
-      {:httpoison, "~> 0.13"},
-      {:poison, "~> 3.1"},
       {:mix_test_watch, "~> 0.2.6", only: :dev, runtime: false},
       {:dialyxir, "~> 0.5.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 0.9.1", only: [:dev, :test], runtime: false},

@@ -1,6 +1,8 @@
 defmodule CouchdbAdapter do
+
   @behaviour Ecto.Adapter
   @behaviour Ecto.Adapter.Storage
+
 
   defmacro __before_compile__(_env), do: nil
 
@@ -140,21 +142,7 @@ defmodule CouchdbAdapter do
   end
 
   # Returns the server connection to use with the given repo
-  # TODO: reuse url_for
-  def url_for(config) when is_list(config) do
-    protocol = Keyword.get(config, :protocol, "http")
-    hostname = Keyword.get(config, :hostname, "localhost")
-    port = Keyword.get(config, :port, 5984)
-    username = Keyword.get(config, :username)
-    password = Keyword.get(config, :password)
-    database = Keyword.get(config, :database)
-    if username && password do
-      "#{protocol}://#{username}:#{password}@#{hostname}:#{port}/#{database}"
-    else
-      "#{protocol}://#{hostname}:#{port}/#{database}"
-    end
-  end
-  def url_for(repo), do: url_for(repo.config)
+  # TODO: reuse
   def server_for(repo) do
     config = repo.config
     protocol = Keyword.get(config, :protocol, "http")

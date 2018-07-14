@@ -4,6 +4,7 @@ defmodule CouchdbAdapter.Fetchers do
 
   alias CouchdbAdapter.ResultProcessor
 
+
   @type preload :: atom() | [atom()] | keyword(preload)
   @type get_options :: [preload: preload]
   @type fetch_options :: [preload: preload, return_keys: boolean(), as_map: (boolean() | :raw)]
@@ -22,7 +23,7 @@ defmodule CouchdbAdapter.Fetchers do
     do
       ResultProcessor.process_result(:get, data, repo, schema, processor_opts)
     else
-      {:error, %{"error" => "not_found", "reason" => "missing"}} -> nil
+      {:error, %{"error" => "not_found"}} -> nil
       {:error, reason} -> raise "Could not get (#{inspect(reason)})"
     end
   end
@@ -47,7 +48,7 @@ defmodule CouchdbAdapter.Fetchers do
     do
       ResultProcessor.process_result(:fetch_all, data, repo, schema, processor_opts)
     else
-      {:error, %{"error" => "not_found", "reason" => "missing_named_view"}} -> raise "View not found (#{ddoc}, #{view_name})"
+      {:error, %{"error" => "not_found"}} -> raise "View not found (#{ddoc}, #{view_name})"
       {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
     end
   end

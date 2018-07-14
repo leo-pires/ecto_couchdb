@@ -1,7 +1,7 @@
 defmodule CouchdbAdapter.ResultProcessor do
 
   alias CouchdbAdapter.{EctoCast, IdentityCast}
-  alias Ecto.Association.{BelongsTo, Has}
+
 
   def process_result(type, result, repo, schema, opts) do
     preloads = opts |> Keyword.get(:preload, []) |> normalize_preloads
@@ -118,16 +118,16 @@ defmodule CouchdbAdapter.ResultProcessor do
   end
 
   defp inject_preload(nil, _, _, _), do: nil
-  defp inject_preload(value, repo, preload, %BelongsTo{related: related_schema}) do
+  defp inject_preload(value, repo, preload, %Ecto.Association.BelongsTo{related: related_schema}) do
     CouchdbAdapter.get(repo, related_schema, value)
     |> inject_preloads(repo, related_schema, preload)
   end
-  defp inject_preload(value, repo, preload, %Has{cardinality: :one, queryable: queryable}) do
+  defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :one, queryable: queryable}) do
     {view_name, related_schema} = related_view(queryable)
     CouchdbAdapter.fetch_one(repo, related_schema, view_name, key: value, include_docs: true)
     |> inject_preloads(repo, related_schema, preload)
   end
-  defp inject_preload(value, repo, preload, %Has{cardinality: :many, queryable: queryable}) do
+  defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :many, queryable: queryable}) do
     {view_name, related_schema} = related_view(queryable)
     CouchdbAdapter.fetch_all(repo, related_schema, view_name, key: value, include_docs: true)
     |> Enum.map(&(&1 |> inject_preloads(repo, related_schema, preload)))
