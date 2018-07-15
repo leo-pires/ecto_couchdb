@@ -42,7 +42,7 @@ defmodule CouchdbAdapter.Fetchers do
   def fetch_all(repo, schema, view_name, opts \\ []) do
     {processor_opts, query} = opts |> split_fetch_options
     query = query |> Enum.into(%{})
-    ddoc = CouchdbAdapter.db_name(schema)
+    ddoc = CouchdbAdapter.ddoc_name(schema)
     with db_props <- CouchdbAdapter.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, query)
     do
@@ -56,7 +56,7 @@ defmodule CouchdbAdapter.Fetchers do
   @spec multiple_fetch_all(Ecto.Repo.t, Ecto.Schema.t, atom(), [map(), ...], fetch_options) :: {:ok, term()}
   def multiple_fetch_all(repo, schema, view_name, queries, opts \\ []) do
     {processor_opts, _} = opts |> split_fetch_options
-    ddoc = CouchdbAdapter.db_name(schema)
+    ddoc = CouchdbAdapter.ddoc_name(schema)
     with db_props <- CouchdbAdapter.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, queries)
     do

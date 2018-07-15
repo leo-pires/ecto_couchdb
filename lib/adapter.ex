@@ -41,7 +41,7 @@ defmodule CouchdbAdapter do
   defp dump_time({h, m, s, ms}), do: {:ok, {h, m, s} |> Time.from_erl!({ms, 0}) |> Time.to_iso8601}
 
   def insert(repo, meta, fields, _on_conflict, returning, _options) do
-    type = db_name(meta)
+    type = ddoc_name(meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -50,14 +50,14 @@ defmodule CouchdbAdapter do
         {:ok, returning(returning, new_fields)}
       else
         # Map the conflict to the format of SQL constraints
-        {:error, :conflict} -> {:invalid, [unique: "#{db_name(meta)}_id_index"]}
+        {:error, :conflict} -> {:invalid, [unique: "#{type}_id_index"]}
         # other errors
         {:error, reason} -> raise "Error while inserting (#{inspect(reason)})"
     end
   end
 
   def insert_all(repo, schema_meta, _header, list, _on_conflict, returning, _options) do
-    type = db_name(schema_meta)
+    type = ddoc_name(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -74,7 +74,7 @@ defmodule CouchdbAdapter do
   end
 
   def update(repo, schema_meta, fields, filters, returning, options) do
-    type = db_name(schema_meta)
+    type = ddoc_name(schema_meta)
     database = repo.config[:database]
     with server <- server_for(repo),
          {:ok, db} <- :couchbeam.open_db(server, database),
@@ -175,10 +175,9 @@ defmodule CouchdbAdapter do
     end
   end
 
-  @spec db_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
-  # TODO: rename to ddoc_name
-  def db_name(%{schema: schema}), do: schema.__schema__(:source)
-  def db_name(module), do: module.__schema__(:source)
+  @spec ddoc_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
+  def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
+  def ddoc_name(module), do: module.__schema__(:source)
 
   @spec to_doc(Keyword.t | map) :: {[{String.t, any}]}
   def to_doc(fields) do
