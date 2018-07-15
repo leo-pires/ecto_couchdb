@@ -30,10 +30,8 @@ defmodule CouchdbAdapter.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:ecto, "~> 2.1.0"},
+      {:ecto, "~> 2.2.0"},
       {:couchdb_connector, github: "leo-pires/couchdb_connector", branch: "audo"},
-      {:couchbeam_amuino, "~> 1.4.3-amuino.8"},
-      {:mix_test_watch, "~> 0.2.6", only: :dev, runtime: false},
       {:dialyxir, "~> 0.5.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 0.9.1", only: [:dev, :test], runtime: false},
       {:coverex, "~> 1.4.10", only: :test},

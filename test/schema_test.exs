@@ -1,13 +1,14 @@
 defmodule SchemaTest do
 
   use ExUnit.Case, async: true
+  import TestSupport
 
 
   describe "storage" do
     setup do
       config_wrapper = %{config: Repo.config |> Keyword.put(:database, "xpto_123")}
       wrong_config_wrapper = config_wrapper |> put_in([:config, :database], "wrong_xpto_321")
-      DatabaseCleaner.ensure_clean_db!(config_wrapper)
+      config_wrapper |> clear_db!
       %{
         config_wrapper: config_wrapper,
         wrong_config_wrapper: wrong_config_wrapper
@@ -36,7 +37,7 @@ defmodule SchemaTest do
   describe "design docs and indexes" do
     setup do
       config_wrapper = %{config: Repo.config |> Keyword.put(:database, "xpto_123")}
-      DatabaseCleaner.ensure_clean_db!(config_wrapper)
+      config_wrapper |> clear_db!
       %{
         config_wrapper: config_wrapper
       }
