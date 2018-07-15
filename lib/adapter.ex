@@ -9,11 +9,17 @@ defmodule CouchdbAdapter do
   def child_spec(repo, _options) do
     :hackney_pool.child_spec(repo, pool_config(repo.config))
   end
+  @default_pool_options [max_connections: 20, timeout: 10_000]
+  defp pool_config(config) do
+    config_options = Keyword.take(config, [:max_connections, :timeout])
+    Keyword.merge @default_pool_options, config_options
+  end
 
   def ensure_all_started(_repo, type) do
     Application.ensure_all_started(:couchbeam, type)
   end
 
+  # TODO: raise para id?
   def autogenerate(:id),        do: nil
   def autogenerate(:binary_id), do: nil
   def autogenerate(:embed_id),  do: Ecto.UUID.generate()
@@ -67,35 +73,6 @@ defmodule CouchdbAdapter do
     end
   end
 
-  def delete(repo, schema_meta, filters, options) do
-    database = repo.config[:database]
-    with server <- server_for(repo),
-         {:ok, db} <- :couchbeam.open_db(server, database),
-         {:ok, [result]} <- :couchbeam.delete_doc(db, to_doc(filters))
-    do
-      {ok, result} = :couchbeam_doc.take_value("ok", result)
-      if ok != :undefined do
-        {:ok, _rev: :couchbeam_doc.get_value("rev", result)}
-      else
-        case :couchbeam_doc.get_value("error", result) do
-          "conflict" ->
-            if Keyword.get(options, :on_conflict, nil) == :retry do
-              {:ok, doc} = :couchbeam.open_doc(db, filters[:_id])
-              rev = :couchbeam_doc.get_rev(doc)
-              new_filters = filters |> Keyword.put(:_rev, rev)
-              delete(repo, schema_meta, new_filters, options)
-            else
-              {:error, :stale}
-            end
-          error ->
-            {:invalid, [check: error]}
-        end
-      end
-    else
-      {:error, reason} -> raise "Error while deleting (#{inspect(reason)})"
-    end
-  end
-
   def update(repo, schema_meta, fields, filters, returning, options) do
     type = db_name(schema_meta)
     database = repo.config[:database]
@@ -126,19 +103,41 @@ defmodule CouchdbAdapter do
     end
   end
 
+  def delete(repo, schema_meta, filters, options) do
+    database = repo.config[:database]
+    with server <- server_for(repo),
+         {:ok, db} <- :couchbeam.open_db(server, database),
+         {:ok, [result]} <- :couchbeam.delete_doc(db, to_doc(filters))
+    do
+      {ok, result} = :couchbeam_doc.take_value("ok", result)
+      if ok != :undefined do
+        {:ok, _rev: :couchbeam_doc.get_value("rev", result)}
+      else
+        case :couchbeam_doc.get_value("error", result) do
+          "conflict" ->
+            if Keyword.get(options, :on_conflict, nil) == :retry do
+              {:ok, doc} = :couchbeam.open_doc(db, filters[:_id])
+              rev = :couchbeam_doc.get_rev(doc)
+              new_filters = filters |> Keyword.put(:_rev, rev)
+              delete(repo, schema_meta, new_filters, options)
+            else
+              {:error, :stale}
+            end
+          error ->
+            {:invalid, [check: error]}
+        end
+      end
+    else
+      {:error, reason} -> raise "Error while deleting (#{inspect(reason)})"
+    end
+  end
+
   def prepare(_, _) do
     raise "Unsupported operation in CouchdbAdapter: prepare"
   end
 
   def execute(_repo, _query_meta, _, _params, _preprocess, _options) do
     raise "Unsupported operation in CouchdbAdapter: execute"
-  end
-
-
-  @default_pool_options [max_connections: 20, timeout: 10_000]
-  defp pool_config(config) do
-    config_options = Keyword.take(config, [:max_connections, :timeout])
-    Keyword.merge @default_pool_options, config_options
   end
 
   # Returns the server connection to use with the given repo
@@ -179,7 +178,6 @@ defmodule CouchdbAdapter do
   @spec db_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
   # TODO: rename to ddoc_name
   def db_name(%{schema: schema}), do: schema.__schema__(:source)
-  def db_name(%{sources: {{db_name, _}}}), do: db_name
   def db_name(module), do: module.__schema__(:source)
 
   @spec to_doc(Keyword.t | map) :: {[{String.t, any}]}
