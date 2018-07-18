@@ -1,4 +1,5 @@
 # TODO: properly exceptions
+# TODO: typespec
 
 defmodule CouchdbAdapter.Repo do
 
@@ -9,6 +10,12 @@ defmodule CouchdbAdapter.Repo do
 
         def all(schema, view_name, opts \\ []) do
           case CouchdbAdapter.Fetchers.fetch_all(unquote(__MODULE__), schema, view_name, opts) do
+            {:ok, data} -> data
+          end
+        end
+
+        def multiple_all(schema, view_name, queries, opts \\ []) do
+          case CouchdbAdapter.Fetchers.multiple_fetch_all(unquote(__MODULE__), schema, view_name, queries, opts) do
             {:ok, data} -> data
           end
         end
