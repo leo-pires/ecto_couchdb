@@ -54,16 +54,23 @@ defmodule CouchdbAdapter.ResultProcessor do
 
   ###
 
-  def process_rows(%{"rows" => rows}, %{return_keys: return_keys} = payload) when is_list(rows) do
+  def process_rows(%{"rows" => rows}, payload) when is_list(rows) do
     rows
-    |> Enum.map(fn (%{"key" => key, "value" => value}) ->
-         value
-         |> process_doc(payload)
-         |> prepare_row_result(key, return_keys)
-       end)
+    |> Enum.map(&(process_row(&1, payload)))
   end
-  defp prepare_row_result(doc, key, true), do: {key, doc}
-  defp prepare_row_result(doc, _, false), do: doc
+
+  defp process_row(%{"key" => key, "doc" => doc}, payload) do
+    doc
+    |> process_doc(payload)
+    |> prepare_row_result(key, payload)
+  end
+  defp process_row(%{"key" => key, "value" => value}, payload) do
+    value
+    |> process_doc(payload)
+    |> prepare_row_result(key, payload)
+  end
+  defp prepare_row_result(doc, key, %{return_keys: true}), do: {key, doc}
+  defp prepare_row_result(doc, _, %{return_keys: false}), do: doc
 
   def process_docs(%{"docs" => docs}, payload) when is_list(docs) do
     docs |> Enum.map(&(process_doc(&1, payload)))

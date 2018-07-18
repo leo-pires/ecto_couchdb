@@ -30,6 +30,9 @@ defmodule RepoTest do
             all: %{
               map: "function(doc) { if (doc.type === 'User') emit(doc._id, doc) }"
             },
+            all_no_doc: %{
+              map: "function(doc) { if (doc.type === 'User') emit(doc._id, null) }"
+            },
             counts: %{
               map: "function(doc) { emit(doc._id, 1) }",
               reduce: "_count"
@@ -389,6 +392,14 @@ defmodule RepoTest do
       assert u.email == "bob@gmail.com"
     end
 
+    test "fetch one returns struct with include_docs" do
+      {:ok, u} = Fetchers.fetch_one(Repo, User, :all_no_doc, key: "test-user-id0", include_docs: true)
+      assert u._id == "test-user-id0"
+      assert not is_nil(u._rev)
+      assert u.username == "bob"
+      assert u.email == "bob@gmail.com"
+    end
+
     test "fetch one returns nil if not found" do
       assert {:ok, nil} = Fetchers.fetch_one(Repo, User, :all, key: "xpto")
     end
@@ -420,6 +431,13 @@ defmodule RepoTest do
     test "fetch_all limit" do
       Repo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
       {:ok, pf} = Fetchers.fetch_all(Repo, User, :all, limit: 1)
+      assert [_] = pf
+      assert hd(pf)._id == "test-user-id0"
+    end
+
+    test "fetch_all limit with include_docs" do
+      Repo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
+      {:ok, pf} = Fetchers.fetch_all(Repo, User, :all_no_doc, include_docs: true, limit: 1)
       assert [_] = pf
       assert hd(pf)._id == "test-user-id0"
     end
