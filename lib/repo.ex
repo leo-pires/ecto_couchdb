@@ -41,6 +41,10 @@ defmodule CouchdbAdapter.Repo do
           end
         end
 
+        def find(schema, query, opts \\ []) do
+          CouchdbAdapter.Fetchers.find(unquote(__MODULE__), schema, query, opts)
+        end
+
         def aggregate(a, b, c \\ []), do: unquote(__MODULE__).aggregate(a, b, c)
         def config(), do: unquote(__MODULE__).config()
         def delete(a, b \\ []), do: unquote(__MODULE__).delete(a, b)
