@@ -68,12 +68,12 @@ defmodule SchemaTest do
         },
         ddoc: "TestPostIndex",
         name: "test1"
-      }
+      } |> Poison.encode!
       assert {:ok, true} = CouchdbAdapter.Storage.create_index(config_wrapper, schema)
     end
 
     test "doesnt create invalid index", %{config_wrapper: config_wrapper} do
-      assert {:error, _} = CouchdbAdapter.Storage.create_index(config_wrapper, %{})
+      assert {:error, _} = CouchdbAdapter.Storage.create_index(config_wrapper, "")
     end
 
   end
