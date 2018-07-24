@@ -316,6 +316,29 @@ defmodule RepoTest do
                      |> Repo.update
                    end)
     end
+
+    test "update on_conflict: :replace_all" do
+      pc = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum"}) |> Repo.insert!
+      assert nil != pc._id
+      assert nil != pc._rev
+      assert pc.title == "lorem"
+      pu1 = Post.changeset(pc, %{title: "ipsum"}) |> Repo.update!
+      assert pu1._id == pc._id
+      assert pu1._rev > pc._rev
+      assert pu1.title == "ipsum"
+      pu2 = Post.changeset(pu1, %{title: "foo"}) |> Repo.update!
+      assert pu2._id == pu1._id
+      assert pu2._rev > pu1._rev
+      assert pu2.title == "foo"
+      pu3 = Post.changeset(pu1, %{title: "goo"}) |> Repo.update!(on_conflict: :replace_all)
+      assert pu3._id == pu2._id
+      assert pu3._rev > pu2._rev
+      assert pu3.title == "goo"
+      {:ok, pf} = Fetchers.get(Repo, Post, pc._id)
+      assert pf._id == pu3._id
+      assert pf._rev == pu3._rev
+      assert pf.title == pu3.title
+    end
   end
 
   describe "insert or update" do
@@ -460,6 +483,13 @@ defmodule RepoTest do
       assert length(list) == 3
       {:ok, list} = Fetchers.fetch_all(Repo, User, :all)
       assert [_] = list
+    end
+
+    test "fetch all by keys" do
+      {:ok, list} = Fetchers.fetch_all(Repo, Post, :all, keys: ["id1", "id2"])
+      assert length(list) == 2
+      assert (list |> Enum.at(0))._id == "id1"
+      assert (list |> Enum.at(1))._id == "id2"
     end
 
     test "raise if invalid view name" do

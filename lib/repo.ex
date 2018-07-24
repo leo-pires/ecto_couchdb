@@ -15,9 +15,7 @@ defmodule CouchdbAdapter.Repo do
         end
 
         def multiple_all(schema, view_name, queries, opts \\ []) do
-          case CouchdbAdapter.Fetchers.multiple_fetch_all(unquote(__MODULE__), schema, view_name, queries, opts) do
-            {:ok, data} -> data
-          end
+          CouchdbAdapter.Fetchers.multiple_fetch_all(unquote(__MODULE__), schema, view_name, queries, opts)
         end
 
         def get(schema, id, opts \\ []) do

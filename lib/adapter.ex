@@ -210,17 +210,18 @@ defmodule CouchdbAdapter do
     {:ok, return}
   end
 
-  defp handle_conflict(repo, filters, [conflict: :retry]) do
-    case db_props_for(repo) |> Couchdb.Connector.get(filters[:_id]) do
-      {:ok, doc} ->
-        rev = doc["_rev"]
-        filters |> Keyword.put(:_rev, rev)
-      _ ->
-        {:error, :stale}
+  defp handle_conflict(repo, filters, options) do
+    if Keyword.get(options, :on_conflict) == :replace_all do
+      case db_props_for(repo) |> Couchdb.Connector.get(filters[:_id]) do
+        {:ok, doc} ->
+          rev = doc["_rev"]
+          {:ok, filters |> Keyword.put(:_rev, rev)}
+        _ ->
+          {:error, :stale}
+      end
+    else
+      {:error, :stale}
     end
-  end
-  defp handle_conflict(_, _, _) do
-    {:error, :stale}
   end
 
 

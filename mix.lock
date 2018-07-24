@@ -2,7 +2,7 @@
   "certifi": {:hex, :certifi, "2.3.1", "d0f424232390bf47d82da8478022301c561cf6445b5b5fb6a84d49a9e76d2639", [:rebar3], [{:parse_trans, "3.2.0", [hex: :parse_trans, repo: "hexpm", optional: false]}], "hexpm"},
   "couchbeam": {:git, "git://github.com/amuino/couchbeam.git", "0d4b47d752870742b4d6d1404b4d9c321b4f3740", [branch: "hex"]},
   "couchbeam_amuino": {:hex, :couchbeam_amuino, "1.4.3-amuino.8", "f1a6ed9fb1cd0bad4877041c016c3ebd608d163bb1fc795fb64d317c32acd350", [:rebar3], [{:hackney, "~>1.9", [hex: :hackney, repo: "hexpm", optional: false]}, {:jsx, "~>2.8.2", [hex: :jsx, repo: "hexpm", optional: false]}], "hexpm"},
-  "couchdb_connector": {:git, "https://github.com/leo-pires/couchdb_connector.git", "08192b607956957c1cdaa6ef868abf898c56bb60", [branch: "audo"]},
+  "couchdb_connector": {:git, "https://github.com/leo-pires/couchdb_connector.git", "b20e8c382549b201da2c996764c2d66f4e3ba7ff", [branch: "audo"]},
   "coverex": {:hex, :coverex, "1.4.15", "60fadf825a6c0439b79d1f98cdb54b6733cdd5cb1b35d15d56026c44ed15a5a8", [:mix], [{:hackney, "~> 1.5", [hex: :hackney, repo: "hexpm", optional: false]}, {:poison, "~> 1.5 or ~> 2.0 or ~> 3.0", [hex: :poison, repo: "hexpm", optional: false]}], "hexpm"},
   "credo": {:hex, :credo, "0.9.3", "76fa3e9e497ab282e0cf64b98a624aa11da702854c52c82db1bf24e54ab7c97a", [:mix], [{:bunt, "~> 0.2.0", [hex: :bunt, repo: "hexpm", optional: false]}, {:poison, ">= 0.0.0", [hex: :poison, repo: "hexpm", optional: false]}], "hexpm"},
   "decimal": {:hex, :decimal, "1.4.0", "fac965ce71a46aab53d3a6ce45662806bdd708a4a95a65cde8a12eb0124a1333", [:mix], [], "hexpm"},
