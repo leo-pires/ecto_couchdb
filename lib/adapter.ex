@@ -21,7 +21,7 @@ defmodule CouchdbAdapter do
   end
 
   def ensure_all_started(_repo, type) do
-    Application.ensure_all_started(:couchbeam, type)
+    Application.ensure_all_started(:hackney, type)
   end
 
   # TODO: raise para id?
