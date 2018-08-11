@@ -156,11 +156,11 @@ defmodule CouchdbAdapter do
     Couchdb.Connector.bulk_docs(db_props, list)
   end
 
-  def prepare(_, _) do
+  def prepare(_atom, _query) do
     raise "Unsupported operation in CouchdbAdapter: prepare"
   end
 
-  def execute(_repo, _query_meta, _, _params, _preprocess, _options) do
+  def execute(_repo, _query_meta, _query, _params, _arg4, _options) do
     raise "Unsupported operation in CouchdbAdapter: execute"
   end
 
@@ -224,8 +224,25 @@ defmodule CouchdbAdapter do
     end
   end
 
+  # Storage behaviour
+  def storage_up(options) do
+    Application.ensure_all_started(:hackney)
+    repo_wrap = %{config: options}
+    case repo_wrap |> CouchdbAdapter.Storage.create_db do
+      {:ok, true} -> :ok
+      {:ok, false} -> {:error, :already_up}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-  defdelegate storage_up(options), to: CouchdbAdapter.Storage
-  defdelegate storage_down(options), to: CouchdbAdapter.Storage
+  def storage_down(options) do
+    Application.ensure_all_started(:hackney)
+    repo_wrap = %{config: options}
+    case repo_wrap |> CouchdbAdapter.Storage.delete_db do
+      {:ok, true} -> :ok
+      {:ok, false} -> {:error, :already_down}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
 end
