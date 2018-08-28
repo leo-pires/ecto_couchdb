@@ -1,12 +1,12 @@
 use Mix.Config
 
-config :couchdb_adapter, Repo,
+config :ecto_couchdb, Repo,
   adapter: CouchdbAdapter,
-  protocol: "https",
-  hostname: "192.168.25.52",
-  port: 6984,
+  protocol: "http",
+  hostname: "localhost",
+  port: 5984,
   username: "admin",
-  password: "qqpK3VZ4LvkWqsbw",
+  password: "admin",
   database: "ecto_couchdb_test",
   pool_size: 5,
   pool_timeout: 2000
