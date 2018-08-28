@@ -17,11 +17,12 @@ defmodule CouchdbAdapter do
   end
   defp pool_config(config) do
     config_options = Keyword.take(config, [:max_connections, :timeout])
-    @default_pool_options |> Keyword.merge(config_options)
+    IO.inspect([config, config_options])
+    @default_pool_options |> Keyword.merge(config_options) |> IO.inspect
   end
 
   def ensure_all_started(_repo, type) do
-    Application.ensure_all_started(:hackney, type)
+    Application.ensure_all_started([:hackney], type)
   end
 
   # TODO: raise para id?
