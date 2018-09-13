@@ -926,18 +926,38 @@ defmodule RepoTest do
         field :_rev, :string, read_after_writes: true, primary_key: true
         field :type, :string, read_after_writes: true
         field :title, :string
-        field :attachment, Attachment
+        field :example_attachment, Attachment
       end
       def changeset(struct, params) do
-        struct |> Ecto.Changeset.cast(params, [:title, :attachment])
+        struct |> Ecto.Changeset.cast(params, [:title, :example_attachment])
       end
     end
 
     test "integration (fetch, insert, fetch, update, fetch" do
-      attachment = %{content_type: "application/json", data: %{foo: "goo"}}
-      {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", attachment: attachment}) |> Repo.insert
-      af1 = Fetchers.get(Repo, TestAttachment, ai._id, attachments: true)
-      IO.inspect(af1)
+      attachment1 = %{content_type: "application/json", data: %{foo: "goo"}}
+      {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment1}) |> Repo.insert
+      assert ai.example_attachment.data == %{foo: "goo"}
+      {:ok, aif1} = Fetchers.get(Repo, TestAttachment, ai._id, attachments: true)
+      {:ok, aif2} = Fetchers.get(Repo, TestAttachment, ai._id)
+      assert aif1._id == ai._id
+      assert not is_nil(aif1.example_attachment)
+      assert aif1.example_attachment.content_type == "application/json"
+      assert aif1.example_attachment.data == %{"foo" => "goo"}
+      assert aif1.example_attachment.stub == false
+      assert is_nil(aif2.example_attachment)
+      attachment2 = %{content_type: "application/json", data: %{bar: "baz"}}
+      {:ok, au} = TestAttachment.changeset(ai, %{example_attachment: attachment2}) |> Repo.update
+      assert au._id == ai._id
+      assert au._rev > ai._rev
+      assert au.example_attachment.data == %{bar: "baz"}
+      {:ok, auf1} = Fetchers.get(Repo, TestAttachment, au._id, attachments: true)
+      assert auf1._id == au._id
+      assert auf1._rev == au._rev
+      assert not is_nil(auf1.example_attachment)
+      assert auf1._rev == au._rev
+      assert auf1.example_attachment.data == %{"bar" => "baz"}
+      assert auf1.example_attachment.stub == false
+      assert auf1.example_attachment.revpos > aif1.example_attachment.revpos
     end
 
     test "cast" do
@@ -951,7 +971,8 @@ defmodule RepoTest do
     end
 
     test "load" do
-      
+      assert {:ok, %Attachment{content_type: "application/json", data: %{"foo" => "goo"}, length: nil, revpos: 1, digest: "md5-pYBktzMm7KfsL0l/ykX3UA==", stub: false}} == Attachment.load(%{"content_type" => "application/json", "data" => "eyJmb28iOiJnb28ifQ==", "digest" => "md5-pYBktzMm7KfsL0l/ykX3UA==", "revpos" => 1})
+      assert {:ok, %Attachment{content_type: "application/json", data: nil, length: 13, revpos: 1, digest: "md5-pYBktzMm7KfsL0l/ykX3UA==", stub: true}} == Attachment.load(%{"content_type" => "application/json", "digest" => "md5-pYBktzMm7KfsL0l/ykX3UA==", "length" => 13, "revpos" => 1, "stub" => true})
     end
 
   end

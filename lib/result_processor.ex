@@ -80,6 +80,7 @@ defmodule CouchdbAdapter.ResultProcessor do
     values |> Enum.map(&(process_doc(&1, payload)))
   end
   def process_doc(map, %{as_map: as_map} = payload) when is_map(map) do
+    map = map |> inject_attachments_in_doc
     map
     |> Map.keys
     |> Enum.reduce([], fn raw_field, acc ->
@@ -93,6 +94,16 @@ defmodule CouchdbAdapter.ResultProcessor do
   def process_doc(value, _payload) do
     value
   end
+  defp inject_attachments_in_doc(map) do
+    attachments = filter_attachments_in_doc(map)
+    map
+    |> Map.delete("_attachments")
+    |> Map.merge(attachments)
+  end
+  defp filter_attachments_in_doc(%{"_attachments" => attachments}) do
+    attachments |> Enum.filter(fn {_, v} -> v["data"] != nil end) |> Map.new
+  end
+  defp filter_attachments_in_doc(map), do: map
 
   defp process_field(nil, _) do
     nil
