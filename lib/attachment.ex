@@ -16,6 +16,9 @@ defmodule CouchdbAdapter.Attachment do
   def cast(%{content_type: content_type, data: data}) do
     {:ok, %Attachment{content_type: content_type, data: data}}
   end
+  def cast(%{"content_type" => content_type, "data" => data}) do
+    {:ok, %Attachment{content_type: content_type, data: data}}
+  end
   def cast(_), do: :error
 
   def dump(%Attachment{content_type: "application/json", data: data}) do
