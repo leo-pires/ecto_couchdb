@@ -927,9 +927,10 @@ defmodule RepoTest do
         field :type, :string, read_after_writes: true
         field :title, :string
         field :example_attachment, Attachment
+        field :other_attachment, Attachment
       end
       def changeset(struct, params) do
-        struct |> Ecto.Changeset.cast(params, [:title, :example_attachment])
+        struct |> Ecto.Changeset.cast(params, [:title, :example_attachment, :other_attachment])
       end
     end
 
@@ -958,6 +959,26 @@ defmodule RepoTest do
       assert auf1.example_attachment.data == %{"bar" => "baz"}
       assert auf1.example_attachment.stub == false
       assert auf1.example_attachment.revpos > aif1.example_attachment.revpos
+    end
+
+    test "multiple attachments" do
+      attachment1 = %{content_type: "application/json", data: %{"foo" => 1}}
+      attachment2 = %{content_type: "foogoo", data: "foogoo"}
+      {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment1, other_attachment: attachment2}) |> Repo.insert
+      assert not is_nil(ai._id)
+      assert not is_nil(ai.example_attachment)
+      assert not is_nil(ai.other_attachment)
+      assert ai.example_attachment.content_type == "application/json"
+      assert ai.example_attachment.data == %{"foo" => 1}
+      assert ai.other_attachment.content_type == "foogoo"
+      assert ai.other_attachment.data == "foogoo"
+      {:ok, af} = Fetchers.get(Repo, TestAttachment, ai._id, attachments: true)
+      assert af._id == ai._id
+      assert af._rev == ai._rev
+      assert af.example_attachment.content_type == ai.example_attachment.content_type
+      assert af.example_attachment.data == ai.example_attachment.data
+      assert af.other_attachment.content_type == ai.other_attachment.content_type
+      assert af.other_attachment.data == ai.other_attachment.data
     end
 
     test "fetch_one and fetch_all" do
