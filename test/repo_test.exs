@@ -960,6 +960,62 @@ defmodule RepoTest do
       assert auf1.example_attachment.revpos > aif1.example_attachment.revpos
     end
 
+    test "fetch_one and fetch_all" do
+      design_doc = {
+        "TestAttachment", %{
+          views: %{
+            all_with_doc: %{
+              map: "function(doc) { if (doc.type === 'TestAttachment') emit(doc._id, doc) }"
+            },
+            all_without_doc: %{
+              map: "function(doc) { if (doc.type === 'TestAttachment') emit(doc._id, null) }"
+            }
+          }
+        }
+      }
+      Repo |> create_views!([design_doc])
+      attachment = %{content_type: "application/json", data: %{foo: "goo"}}
+      ai = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment}) |> Repo.insert!
+      # without_doc not returning attachment
+      {:ok, fetch_one1} = Repo |> Fetchers.fetch_one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true)
+      {:ok, fetch_all1} = Repo |> Fetchers.fetch_all(TestAttachment, :all_without_doc, include_docs: true)
+      fetch_all1 = fetch_all1 |> hd
+      assert fetch_one1._id == ai._id
+      assert fetch_one1._rev == ai._rev
+      assert fetch_one1.example_attachment == nil
+      assert fetch_all1._id == ai._id
+      assert fetch_all1._rev == ai._rev
+      assert fetch_all1.example_attachment == nil
+      # without_doc returning attachment
+      {:ok, fetch_one2} = Repo |> Fetchers.fetch_one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true, attachments: true)
+      {:ok, fetch_all2} = Repo |> Fetchers.fetch_all(TestAttachment, :all_without_doc, include_docs: true, attachments: true)
+      fetch_all2 = fetch_all2 |> hd
+      assert fetch_one2._id == ai._id
+      assert fetch_one2._rev == ai._rev
+      assert fetch_one2.example_attachment.content_type == "application/json"
+      assert fetch_one2.example_attachment.data == %{"foo" => "goo"}
+      assert fetch_one2.example_attachment.digest == "md5-pYBktzMm7KfsL0l/ykX3UA=="
+      assert fetch_one2.example_attachment.revpos == 1
+      assert fetch_all2._id == ai._id
+      assert fetch_all2._rev == ai._rev
+      assert fetch_all2.example_attachment.content_type == "application/json"
+      assert fetch_all2.example_attachment.data == %{"foo" => "goo"}
+      assert fetch_all2.example_attachment.digest == "md5-pYBktzMm7KfsL0l/ykX3UA=="
+      assert fetch_all2.example_attachment.revpos == 1
+      # with_doc
+      {:ok, fetch_one3} = Repo |> Fetchers.fetch_one(TestAttachment, :all_with_doc, key: ai._id, include_docs: true, attachments: true)
+      {:ok, fetch_all3} = Repo |> Fetchers.fetch_all(TestAttachment, :all_with_doc, include_docs: true, attachments: true)
+      fetch_all3 = fetch_all3 |> hd
+      assert fetch_one3._id == ai._id
+      assert fetch_one3._rev == ai._rev
+      assert fetch_one3.title == "foogoo"
+      assert fetch_one3.example_attachment == nil
+      assert fetch_all3._id == ai._id
+      assert fetch_all3._rev == ai._rev
+      assert fetch_all3.title == "foogoo"
+      assert fetch_all3.example_attachment == nil
+    end
+
     test "cast" do
       assert {:ok, %Attachment{content_type: "foo", data: "goo"}} == Attachment.cast(%Attachment{content_type: "foo", data: "goo"})
       assert {:ok, %Attachment{content_type: "foo", data: "goo"}} == Attachment.cast(%{content_type: "foo", data: "goo"})
