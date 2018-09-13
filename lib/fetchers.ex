@@ -12,9 +12,10 @@ defmodule CouchdbAdapter.Fetchers do
 
   @spec get(Ecto.Repo.t, Ecto.Schema.t, String.t, get_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()} | no_return()
   def get(repo, schema, id, opts \\ []) do
-    {processor_opts, _} = opts |> split_fetch_options
+    {processor_opts, query} = opts |> split_fetch_options
+    query = query |> Enum.into(%{})
     with db_props <- CouchdbAdapter.db_props_for(repo),
-         {:ok, data} <- Couchdb.Connector.get(db_props, id)
+         {:ok, data} <- Couchdb.Connector.get(db_props, id, query)
     do
       {:ok, ResultProcessor.process_result(:get, data, repo, schema, processor_opts)}
     else

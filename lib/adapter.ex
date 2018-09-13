@@ -187,11 +187,32 @@ defmodule CouchdbAdapter do
 
   @spec prepare_for_couch(keyword | map) :: map
   defp prepare_for_couch(fields) do
-    fields |> Enum.map(fn {k, v} -> {k |> to_string, v} end) |> Map.new
+    {attachment_fields, non_attachment_fields} = split_attachments(fields)
+    attachments = prepare_attachments(attachment_fields)
+    non_attachment_fields
+    |> Enum.map(fn {k, v} -> {k |> to_string, v} end)
+    |> Map.new
+    |> Map.merge(%{"_attachments" => attachments})
   end
   @spec prepare_for_couch(keyword | map, String.t) :: map
   defp prepare_for_couch(fields, type) when is_list(fields) do
     prepare_for_couch(fields) |> Map.put("type", type)
+  end
+
+  defp split_attachments(fields) do
+    fields
+    |> Enum.split_with(fn {_, v} ->
+         case v do
+           %{type: :couch_attachment} -> true
+           _ -> false
+         end
+       end)
+  end
+  defp prepare_attachments(attachment_fields) do
+    attachment_fields
+    |> Enum.reduce(%{}, fn ({k, %{content_type: content_type, data: data}}, acc) ->
+         Map.put(acc, k |> to_string, %{"content_type" => content_type, "data" => data})
+       end)
   end
 
   @spec prepare_for_returning(keyword, String.t | nil, keyword) :: keyword

@@ -4,6 +4,7 @@ defmodule RepoTest do
   import TestSupport
   alias Repo.Couchdb, as: Repo
   alias CouchdbAdapter.Fetchers
+  alias CouchdbAdapter.Attachment
 
 
   setup do
@@ -913,6 +914,46 @@ defmodule RepoTest do
     test "get" do
       Repo.get(Post, "foo")
     end
+  end
+
+  describe "Attachments" do
+    defmodule TestAttachment do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "TestAttachment" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
+        field :title, :string
+        field :attachment, Attachment
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:title, :attachment])
+      end
+    end
+
+    test "integration (fetch, insert, fetch, update, fetch" do
+      attachment = %{content_type: "application/json", data: %{foo: "goo"}}
+      {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", attachment: attachment}) |> Repo.insert
+      af1 = Fetchers.get(Repo, TestAttachment, ai._id, attachments: true)
+      IO.inspect(af1)
+    end
+
+    test "cast" do
+      assert {:ok, %Attachment{content_type: "foo", data: "goo"}} == Attachment.cast(%Attachment{content_type: "foo", data: "goo"})
+      assert {:ok, %Attachment{content_type: "foo", data: "goo"}} == Attachment.cast(%{content_type: "foo", data: "goo"})
+    end
+
+    test "dump" do
+      assert {:ok, %{type: :couch_attachment, content_type: "application/json", data: "eyJmb28iOiJnb28ifQ=="}} == Attachment.dump(%Attachment{content_type: "application/json", data: %{foo: "goo"}})
+      assert {:ok, %{type: :couch_attachment, content_type: "foogoo", data: "Zm9vZ29v"}} == Attachment.dump(%Attachment{content_type: "foogoo", data: "foogoo"})
+    end
+
+    test "load" do
+      
+    end
+
   end
 
 end
