@@ -4,8 +4,8 @@ defmodule CouchdbAdapter.Attachment do
 
   @behaviour Ecto.Type
 
-  @enforce_keys [:content_type]
-  defstruct [:content_type, :data, :revpos, :digest, :length, :stub]
+  @enforce_keys [:content_type, :data]
+  defstruct [:content_type, :data, :revpos]
 
 
   def type, do: :map
@@ -33,18 +33,18 @@ defmodule CouchdbAdapter.Attachment do
   def dump(_), do: :error
   defp do_dump(content_type, data) do
     try do
-      {:ok, %{type: :couch_attachment, content_type: content_type, data: data |> Base.encode64}}
+      {:ok, %{content_type: content_type, data: data |> Base.encode64}}
     rescue
       _ -> :error
     end
   end
 
-  def load(%{"content_type" => content_type, "length" => alength, "revpos" => revpos, "digest" => digest, "stub" => true}) do
-    {:ok, %Attachment{content_type: content_type, length: alength, revpos: revpos, digest: digest, stub: true}}
-  end
-  def load(%{"content_type" => content_type, "data" => data, "revpos" => revpos, "digest" => digest}) do
-    %Attachment{content_type: content_type, data: data, revpos: revpos, digest: digest, stub: false}
+  def load(%{"content_type" => content_type, "data" => data, "revpos" => revpos}) do
+    %Attachment{content_type: content_type, data: data, revpos: revpos}
     |> do_load
+  end
+  def load(%{"content_type" => content_type, "revpos" => revpos}) do
+    {:ok, %Attachment{content_type: content_type, data: nil, revpos: revpos}}
   end
   defp do_load(%Attachment{content_type: "application/json", data: data} = attachment) do
     with {:ok, base_decoded} <- Base.decode64(data),

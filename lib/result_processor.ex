@@ -94,16 +94,12 @@ defmodule CouchdbAdapter.ResultProcessor do
   def process_doc(value, _payload) do
     value
   end
-  defp inject_attachments_in_doc(map) do
-    attachments = filter_attachments_in_doc(map)
+  defp inject_attachments_in_doc(%{"_attachments" => attachments} = map) do
     map
     |> Map.delete("_attachments")
     |> Map.merge(attachments)
   end
-  defp filter_attachments_in_doc(%{"_attachments" => attachments}) do
-    attachments |> Enum.filter(fn {_, v} -> v["data"] != nil end) |> Map.new
-  end
-  defp filter_attachments_in_doc(map), do: map
+  defp inject_attachments_in_doc(map), do: map
 
   defp process_field(nil, _) do
     nil

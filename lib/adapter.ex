@@ -45,10 +45,13 @@ defmodule CouchdbAdapter do
   defp dump_date(date), do: {:ok, date |> Date.from_erl! |> Date.to_iso8601}
   defp dump_time({h, m, s, ms}), do: {:ok, {h, m, s} |> Time.from_erl!({ms, 0}) |> Time.to_iso8601}
 
-  def insert(repo, meta, fields, _on_conflict, returning, _options) do
+  def insert(repo, schema_meta, fields, _on_conflict, returning, _options) do
     db_props = db_props_for(repo)
-    type = ddoc_name(meta)
-    {id, doc} = fields |> prepare_for_couch(type) |> Map.pop("_id")
+    type = ddoc_name(schema_meta)
+    {id, doc} =
+      prepare_for_couch(%{}, fields, schema_meta.schema)
+      |> Map.put("type", type)
+      |> Map.pop("_id")
     with {:ok, %{payload: payload}} <- do_create(db_props, doc, id)
     do
       payload |> prepare_for_returning(type, returning)
@@ -70,7 +73,7 @@ defmodule CouchdbAdapter do
     db_props = db_props_for(repo)
     type = ddoc_name(schema_meta)
     with {:ok, fetched_doc} <- do_fetch_for_update(db_props, filters),
-         {:ok, %{payload: payload}} <- do_update(db_props, fetched_doc, fields)
+         {:ok, %{payload: payload}} <- do_update(db_props, fetched_doc, fields, schema_meta)
     do
       payload |> prepare_for_returning(type, returning)
     else
@@ -95,10 +98,8 @@ defmodule CouchdbAdapter do
       end
     end
   end
-  defp do_update(db_props, fetched_doc, updated_fields) do
-    updated_doc =
-      fetched_doc
-      |> Map.merge(updated_fields |> prepare_for_couch)
+  defp do_update(db_props, fetched_doc, updated_fields, schema_meta) do
+    updated_doc = prepare_for_couch(fetched_doc, updated_fields, schema_meta.schema)
     db_props |> Couchdb.Connector.update(updated_doc)
   end
 
@@ -132,7 +133,7 @@ defmodule CouchdbAdapter do
   def insert_all(repo, schema_meta, _header, list, _on_conflict, returning, _options) do
     db_props = db_props_for(repo)
     type = ddoc_name(schema_meta)
-    prepared = list |> do_prepare_insert_all(type)
+    prepared = list |> do_prepare_insert_all(type, schema_meta.schema)
     with {:ok, %{payload: data}} <- do_insert_all(db_props, prepared)
     do
       {_return, count} =
@@ -149,8 +150,8 @@ defmodule CouchdbAdapter do
         raise "Error while deleting (#{inspect(reason)})"
     end
   end
-  defp do_prepare_insert_all(list, type) do
-    list |> Enum.map(&(&1 |> prepare_for_couch(type)))
+  defp do_prepare_insert_all(list, type, schema) do
+    list |> Enum.map(&(prepare_for_couch(%{}, &1, schema) |> Map.put("type", type)))
   end
   defp do_insert_all(db_props, list) do
     Couchdb.Connector.bulk_docs(db_props, list)
@@ -185,34 +186,51 @@ defmodule CouchdbAdapter do
   def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
   def ddoc_name(module), do: module.__schema__(:source)
 
-  @spec prepare_for_couch(keyword | map) :: map
-  defp prepare_for_couch(fields) do
-    {attachment_fields, non_attachment_fields} = split_attachments(fields)
-    attachments = prepare_attachments(attachment_fields)
-    non_attachment_fields
-    |> Enum.map(fn {k, v} -> {k |> to_string, v} end)
-    |> Map.new
+  @spec prepare_for_couch(map, keyword | map, Ecto.Adapter.schema_meta) :: map
+  defp prepare_for_couch(fetched_doc, new_fields, schema_meta) do
+    {attachments, new_fields} = split_attachments(fetched_doc, new_fields, schema_meta)
+    attachments = prepare_attachments(attachments)
+    new_fields = new_fields |> Enum.map(fn {k, v} -> {k |> to_string, v} end) |> Map.new
+    fetched_doc
+    |> Map.merge(new_fields)
     |> Map.merge(%{"_attachments" => attachments})
   end
-  @spec prepare_for_couch(keyword | map, String.t) :: map
-  defp prepare_for_couch(fields, type) when is_list(fields) do
-    prepare_for_couch(fields) |> Map.put("type", type)
-  end
 
-  defp split_attachments(fields) do
-    fields
-    |> Enum.split_with(fn {_, v} ->
-         case v do
-           %{type: :couch_attachment} -> true
-           _ -> false
-         end
+  defp split_attachments(fetched_doc, all_fields, schema) do
+    # split attachment and fields
+    {new_attachments, new_fields} =
+      all_fields
+      |> Enum.split_with(fn {k, _} ->
+          schema.__schema__(:type, k) == CouchdbAdapter.Attachment
+         end)
+    # merge existing attachments and new ones
+    old_attachments = fetched_doc["_attachments"] || %{}
+    new_attachments_names = new_attachments |> Enum.map(fn {k, _} -> k |> to_string end)
+    all_attachments =
+      old_attachments
+      |> Map.drop(new_attachments_names)
+      |> Map.merge(Enum.into(new_attachments, %{}))
+    # return
+    {all_attachments, new_fields}
+  end
+  defp prepare_attachments(attachments) do
+    attachments
+    |> Enum.reduce(%{}, fn
+         ({_, nil}, acc) -> acc
+         ({k, v}, acc) -> Map.put(acc, k |> to_string, prepare_attachment(v))
        end)
   end
-  defp prepare_attachments(attachment_fields) do
-    attachment_fields
-    |> Enum.reduce(%{}, fn ({k, %{content_type: content_type, data: data}}, acc) ->
-         Map.put(acc, k |> to_string, %{"content_type" => content_type, "data" => data})
-       end)
+  defp prepare_attachment(%{"content_type" => content_type, "stub" => true}) do
+    do_prepare_attachment(content_type, nil)
+  end
+  defp prepare_attachment(%{content_type: content_type, data: data}) do
+    do_prepare_attachment(content_type, data)
+  end
+  defp do_prepare_attachment(content_type, nil) do
+    %{"content_type" => content_type, "stub" => true}
+  end
+  defp do_prepare_attachment(content_type, data) do
+    %{"content_type" => content_type, "data" => data}
   end
 
   @spec prepare_for_returning(keyword, String.t | nil, keyword) :: keyword
