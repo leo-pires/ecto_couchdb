@@ -68,6 +68,7 @@ defmodule CouchdbAdapter.Fetchers do
   def find(repo, schema, query, opts \\ []) do
     {processor_opts, _} = opts |> split_fetch_options
     with db_props <- CouchdbAdapter.db_props_for(repo),
+         {:ok, query} <- fields_for_query(schema, query),
          {:ok, data} <- Couchdb.Connector.find(db_props, query)
     do
       {:ok, ResultProcessor.process_result(:find, data, repo, schema, processor_opts)}
@@ -76,6 +77,19 @@ defmodule CouchdbAdapter.Fetchers do
       error -> error
     end
   end
+
+  defp fields_for_query(_, %{fields: _, fields_except: _} = _query) do
+    raise "Cannot use both fields and fields_except"
+  end
+  defp fields_for_query(schema, %{fields_except: fields_except} = query) do
+    fields = schema.__schema__(:fields) |> Enum.map(&(Atom.to_string(&1)))
+    query =
+      query
+      |> Map.put(:fields, fields -- fields_except)
+      |> Map.drop([:fields_except])
+    {:ok, query}
+  end
+  defp fields_for_query(_, query), do: {:ok, query}
 
   defp split_fetch_options(opts), do: opts |> Keyword.split([:preload, :as_map, :return_keys])
 

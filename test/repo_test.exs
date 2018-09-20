@@ -80,7 +80,7 @@ defmodule RepoTest do
         %Grant{user: "other", access: "read"}
       ]
     %{
-      db_props: db_props,      
+      db_props: db_props,
       design_docs: design_docs,
       posts: posts,
       post: post,
@@ -908,6 +908,21 @@ defmodule RepoTest do
       assert not is_nil(a.user)
       assert a.user._id == "test-user-id-john"
     end
+
+    test "find with fields_except" do
+      maha = Repo.insert! %Post{title: "Mahatma", body: "easter egg", user: %User{_id: "id-mahatma", username: "mahatma", email: "mahatma@gmail.com"}}
+      selector =
+        %{selector:
+          %{title: %{"$eq" => "Mahatma"}},
+          fields_except: ["body"]
+        }
+      {:ok, %{docs: list}} = Fetchers.find(Repo, Post, selector, preload: :user)
+      a = list |> hd
+      assert maha.title == a.title
+      assert maha.body == "easter egg"
+      assert a.body == nil
+    end
+
   end
 
   describe "CouchdbAdapter.Repo" do
