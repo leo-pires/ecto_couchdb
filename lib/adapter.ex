@@ -1,4 +1,3 @@
-# TODO: tratamento de transaction?
 # TODO: pooling?
 
 defmodule CouchdbAdapter do
@@ -29,21 +28,66 @@ defmodule CouchdbAdapter do
   def autogenerate(:binary_id), do: nil
   def autogenerate(:embed_id),  do: Ecto.UUID.generate()
 
+  def loaders(:utc_datetime, type), do: [&load_utc_datetime/1, type]
   def loaders(:naive_datetime, type), do: [&load_naive_datetime/1, type]
   def loaders(:date, type), do: [&load_date/1, type]
   def loaders(:time, type), do: [&load_time/1, type]
   def loaders(_, type), do: [type]
-  defp load_naive_datetime(datetime), do: {:ok, datetime |> NaiveDateTime.from_iso8601!}
-  defp load_date(date), do: date |> Date.from_iso8601
-  defp load_time(time), do: time |> Time.from_iso8601
-
+  defp load_utc_datetime(datetime_str) do
+    case DateTime.from_iso8601(datetime_str) do
+      {:ok, datetime, _} -> {:ok, datetime}
+      _ -> :error
+    end
+  end
+  defp load_naive_datetime(datetime_str) do
+    case NaiveDateTime.from_iso8601(datetime_str) do
+      {:ok, datetime} -> {:ok, datetime}
+      _ -> :error
+    end
+  end
+  defp load_date(date_str) do
+    case Date.from_iso8601(date_str) do
+      {:ok, date} -> {:ok, date}
+      _ -> :error
+    end
+  end
+  defp load_time(time_str) do
+    case Time.from_iso8601(time_str) do
+      {:ok, time} -> {:ok, time}
+      _ -> :error
+    end
+  end
+  def dumpers(:utc_datetime, type), do: [type, &dump_utc_datetime/1]
   def dumpers(:naive_datetime, type), do: [type, &dump_naive_datetime/1]
   def dumpers(:date, type), do: [type, &dump_date/1]
   def dumpers(:time, type), do: [type, &dump_time/1]
   def dumpers(_, type), do: [type]
-  defp dump_naive_datetime({{_, _, _} = dt, {h, m, s, ms}}), do: {:ok, {dt, {h, m, s}} |> NaiveDateTime.from_erl!({ms, 6}) |> NaiveDateTime.to_iso8601}
-  defp dump_date(date), do: {:ok, date |> Date.from_erl! |> Date.to_iso8601}
-  defp dump_time({h, m, s, ms}), do: {:ok, {h, m, s} |> Time.from_erl!({ms, 0}) |> Time.to_iso8601}
+  defp dump_utc_datetime({{_, _, _} = dt, {h, m, s, ms}}) do
+    case NaiveDateTime.from_erl({dt, {h, m, s}}, {ms, 6}) do
+      {:ok, naive_datetime} ->
+        {:ok, datetime} = DateTime.from_naive(naive_datetime, "Etc/UTC")
+        {:ok, datetime |> DateTime.to_iso8601}
+      _ -> :error
+    end
+  end
+  defp dump_naive_datetime({{_, _, _} = dt, {h, m, s, ms}}) do
+    case NaiveDateTime.from_erl({dt, {h, m, s}}, {ms, 6}) do
+      {:ok, datetime} -> {:ok, datetime |> NaiveDateTime.to_iso8601}
+      _ -> :error
+    end
+  end
+  defp dump_date(dt) do
+    case Date.from_erl(dt) do
+      {:ok, date} -> {:ok, date}
+      _ -> :error
+    end
+  end
+  defp dump_time({h, m, s, ms}) do
+    case Time.from_erl({h, m, s}, {ms, 0}) do
+      {:ok, time} -> {:ok, time |> Time.to_iso8601}
+      _ -> :error
+    end
+  end
 
   def insert(repo, schema_meta, fields, _on_conflict, returning, _options) do
     db_props = db_props_for(repo)

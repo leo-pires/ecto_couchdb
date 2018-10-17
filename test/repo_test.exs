@@ -1092,4 +1092,34 @@ defmodule RepoTest do
 
   end
 
+  describe "UTC DateTime" do
+    defmodule TestUTCDate do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "UTCDateTime" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
+        field :date, :utc_datetime
+        field :example_attachment, Attachment
+        field :other_attachment, Attachment
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:date])
+      end
+    end
+
+    test "support :utc_datetime" do
+      base_date = DateTime.utc_now()
+      di = TestUTCDate.changeset(%TestUTCDate{}, %{date: base_date}) |> Repo.insert!
+      assert di.date == base_date
+      {:ok, fi} = Fetchers.get(Repo, TestUTCDate, di._id)
+      assert fi._id == di._id
+      assert fi._rev == di._rev
+      assert fi.date == di.date
+    end
+
+  end
+
 end
