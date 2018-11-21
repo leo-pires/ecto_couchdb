@@ -216,11 +216,11 @@ defmodule CouchdbAdapter do
     hostname = Keyword.get(config, :hostname, "localhost")
     port = Keyword.get(config, :port, 5984)
     database = Keyword.get(config, :database)
-    username = Keyword.get(config, :username)
+    username = Keyword.get(config, :username) || Keyword.get(config, :user)
     password = Keyword.get(config, :password)
     props = %{protocol: protocol, hostname: hostname, port: port, database: database}
     if username && password do
-      props |> Map.merge(%{username: username, password: password})
+      props |> Map.merge(%{user: username, password: password})
     else
       props
     end
