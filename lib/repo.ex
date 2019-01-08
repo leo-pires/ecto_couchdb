@@ -11,6 +11,7 @@ defmodule CouchdbAdapter.Repo do
         def all(schema, view_name, opts \\ []) do
           case CouchdbAdapter.Fetchers.fetch_all(unquote(__MODULE__), schema, view_name, opts) do
             {:ok, data} -> data
+            error -> error
           end
         end
 
@@ -21,6 +22,7 @@ defmodule CouchdbAdapter.Repo do
         def get(schema, id, opts \\ []) do
           case CouchdbAdapter.Fetchers.get(unquote(__MODULE__), schema, id, opts) do
             {:ok, data} -> data
+            error -> error
           end
         end
 
@@ -28,6 +30,7 @@ defmodule CouchdbAdapter.Repo do
           case CouchdbAdapter.Fetchers.get(unquote(__MODULE__), schema, id, opts) do
             {:ok, nil} -> raise "not found"
             {:ok, data} -> data
+            error -> error
           end
         end
 
@@ -35,6 +38,7 @@ defmodule CouchdbAdapter.Repo do
           case CouchdbAdapter.Fetchers.fetch_one(unquote(__MODULE__), schema, view_name, opts) do
             {:ok, :many} -> raise "too many found"
             {:ok, data} -> data
+            error -> error
           end
         end
 
@@ -43,6 +47,7 @@ defmodule CouchdbAdapter.Repo do
             {:ok, nil} -> raise "not found"
             {:ok, :many} -> raise "too many found"
             {:ok, data} -> data
+            error -> error
           end
         end
 

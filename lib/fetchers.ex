@@ -20,6 +20,7 @@ defmodule CouchdbAdapter.Fetchers do
       {:ok, ResultProcessor.process_result(:get, data, repo, schema, processor_opts)}
     else
       {:error, %{"error" => "not_found"}} -> {:ok, nil}
+      {:error, :timeout} -> {:error, :timeout}
       {:error, reason} -> raise "Could not get (#{inspect(reason)})"
     end
   end
@@ -44,7 +45,8 @@ defmodule CouchdbAdapter.Fetchers do
       {:ok, ResultProcessor.process_result(:fetch_all, data, repo, schema, processor_opts)}
     else
       {:error, %{"error" => "not_found"}} -> raise "View not found (#{ddoc}, #{view_name})"
-      {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
+      {:error, :timeout} -> {:error, :timeout}
+      {:error, reason} -> raise "Could not fetch (#{inspect(reason)})"
     end
   end
 
@@ -60,7 +62,8 @@ defmodule CouchdbAdapter.Fetchers do
     else
       # TODO: check error for multiple fetch all!
       {:error, %{"error" => "not_found", "reason" => "missing_named_view"}} -> raise "View not found (#{ddoc}, #{view_name})"
-      {:error, reason} -> raise "Error while fetching (#{inspect(reason)})"
+      {:error, :timeout} -> {:error, :timeout}
+      {:error, reason} -> raise "Could not fetch (#{inspect(reason)})"
     end
   end
 
