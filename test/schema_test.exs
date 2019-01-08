@@ -3,6 +3,15 @@ defmodule SchemaTest do
   use ExUnit.Case, async: true
   import TestSupport
 
+  @sample_ddoc %{
+    _id: nil,
+    language: "javascript",
+    views: %{
+      all: %{
+        map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
+      }
+    }
+  }
 
   describe "storage" do
     setup do
@@ -44,17 +53,16 @@ defmodule SchemaTest do
     end
 
     test "create design doc", %{config_wrapper: config_wrapper} do
-      ddoc = "_design/TestPost"
-      code = %{
-        _id: ddoc,
-        language: "javascript",
-        views: %{
-          all: %{
-            map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
-          }
-        }
-      } |> Poison.encode!
+      ddoc = "TestPost"
+      code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
       assert {:ok, true} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, ddoc, code)
+    end
+
+    test "drop design doc", %{config_wrapper: config_wrapper} do
+      ddoc = "TestPost"
+      code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
+      assert {:ok, true} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, ddoc, code)
+      assert {:ok, true} = CouchdbAdapter.Storage.drop_ddoc(config_wrapper, ddoc)
     end
 
     test "doesnt create invalid design doc", %{config_wrapper: config_wrapper} do

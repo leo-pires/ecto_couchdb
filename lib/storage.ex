@@ -29,6 +29,14 @@ defmodule CouchdbAdapter.Storage do
     end
   end
 
+  @spec drop_ddoc(Ecto.Repo.t, String.t) :: {:ok, boolean} | {:error, term()}
+  def drop_ddoc(repo, ddoc) do
+    case repo |> CouchdbAdapter.db_props_for |> Couchdb.Connector.View.drop_view(ddoc) |> as_map do
+      {:ok, %{"ok" => true}} -> {:ok, true}
+      {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+    end
+  end
+
   @spec create_index(Ecto.Repo.t, String.t | map) :: {:ok, boolean} | {:error, term()}
   def create_index(repo, data) do
     case repo |> CouchdbAdapter.db_props_for |> Couchdb.Connector.View.create_index(data) |> as_map do
