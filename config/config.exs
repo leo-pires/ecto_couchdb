@@ -27,6 +27,5 @@ use Mix.Config
 # Configuration from the imported file will override the ones defined
 # here (which is why it is important to import them last).
 #
-if File.exists?("#{__DIR__}/#{Mix.env}.exs") do
-  import_config "#{Mix.env}.exs"
-end
+
+# import_config "#{Mix.env}.exs"

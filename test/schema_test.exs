@@ -1,4 +1,4 @@
-defmodule SchemaTest do
+defmodule Couchdb.Ecto.SchemaTest do
 
   use ExUnit.Case, async: true
   import TestSupport
@@ -15,7 +15,7 @@ defmodule SchemaTest do
 
   describe "storage" do
     setup do
-      config_wrapper = %{config: Repo.config |> Keyword.put(:database, "xpto_123")}
+      config_wrapper = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
       wrong_config_wrapper = config_wrapper |> put_in([:config, :database], "wrong_xpto_321")
       config_wrapper |> clear_db!
       %{
@@ -45,7 +45,7 @@ defmodule SchemaTest do
 
   describe "design docs and indexes" do
     setup do
-      config_wrapper = %{config: Repo.config |> Keyword.put(:database, "xpto_123")}
+      config_wrapper = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
       config_wrapper |> clear_db!
       %{
         config_wrapper: config_wrapper
