@@ -1,7 +1,7 @@
 use Mix.Config
 
 config :ecto_couchdb, Repo,
-  adapter: CouchdbAdapter,
+  adapter: Couchdb.Ecto,
   protocol: "http",
   hostname: "localhost",
   port: 5984,

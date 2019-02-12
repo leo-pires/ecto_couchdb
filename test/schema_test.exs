@@ -25,20 +25,20 @@ defmodule SchemaTest do
     end
 
     test "drop db", %{config_wrapper: config_wrapper} do
-      assert {:ok, true} = CouchdbAdapter.Storage.delete_db(config_wrapper)
+      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config_wrapper)
     end
 
     test "doesnt drop db that doesnt exists", %{wrong_config_wrapper: wrong_config_wrapper} do
-      assert {:ok, false} = CouchdbAdapter.Storage.delete_db(wrong_config_wrapper)
+      assert {:ok, false} = Couchdb.Ecto.Storage.delete_db(wrong_config_wrapper)
     end
 
     test "create db", %{config_wrapper: config_wrapper} do
-      assert {:ok, true} = CouchdbAdapter.Storage.delete_db(config_wrapper)
-      assert {:ok, true} = CouchdbAdapter.Storage.create_db(config_wrapper)
+      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config_wrapper)
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_db(config_wrapper)
     end
 
     test "doesnt create db that already exists", %{config_wrapper: config_wrapper} do
-      assert {:ok, false} = CouchdbAdapter.Storage.create_db(config_wrapper)
+      assert {:ok, false} = Couchdb.Ecto.Storage.create_db(config_wrapper)
     end
 
   end
@@ -55,18 +55,18 @@ defmodule SchemaTest do
     test "create design doc", %{config_wrapper: config_wrapper} do
       ddoc = "TestPost"
       code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
-      assert {:ok, true} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, ddoc, code)
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
     end
 
     test "drop design doc", %{config_wrapper: config_wrapper} do
       ddoc = "TestPost"
       code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
-      assert {:ok, true} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, ddoc, code)
-      assert {:ok, true} = CouchdbAdapter.Storage.drop_ddoc(config_wrapper, ddoc)
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
+      assert {:ok, true} = Couchdb.Ecto.Storage.drop_ddoc(config_wrapper, ddoc)
     end
 
     test "doesnt create invalid design doc", %{config_wrapper: config_wrapper} do
-      assert {:error, _} = CouchdbAdapter.Storage.create_ddoc(config_wrapper, "", "")
+      assert {:error, _} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, "", "")
     end
 
     test "create index", %{config_wrapper: config_wrapper} do
@@ -77,11 +77,11 @@ defmodule SchemaTest do
         ddoc: "TestPostIndex",
         name: "test1"
       } |> Poison.encode!
-      assert {:ok, true} = CouchdbAdapter.Storage.create_index(config_wrapper, schema)
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_index(config_wrapper, schema)
     end
 
     test "doesnt create invalid index", %{config_wrapper: config_wrapper} do
-      assert {:error, _} = CouchdbAdapter.Storage.create_index(config_wrapper, "")
+      assert {:error, _} = Couchdb.Ecto.Storage.create_index(config_wrapper, "")
     end
 
   end

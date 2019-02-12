@@ -2,14 +2,14 @@ defmodule RepoTest do
 
   use ExUnit.Case, async: true
   import TestSupport
-  alias Repo.Couchdb, as: Repo
-  alias CouchdbAdapter.Fetchers
-  alias CouchdbAdapter.Attachment
+  alias Repo.FetchersHelper, as: Repo
+  alias Couchdb.Ecto.Fetchers
+  alias Couchdb.Ecto.Attachment
 
 
   setup do
     Repo |> clear_db!
-    db_props = Repo |> CouchdbAdapter.db_props_for
+    db_props = Repo |> Couchdb.Ecto.db_props_for
     design_docs = [
       {
         "Post",
@@ -558,14 +558,14 @@ defmodule RepoTest do
     end
 
     test "normalize_preloads" do
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads(:b) == [b: []]
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads([:b]) == [b: []]
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: :d]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [:c, :d]]) == [b: [c: [], d: []]]
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d, :e]]]) == [b: [c: [d: [], e: []]]]
-      assert CouchdbAdapter.ResultProcessor.normalize_preloads([b: [c: [:d, :e]], f: :g]) == [b: [c: [d: [], e: []]], f: [g: []]]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads(:b) == [b: []]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads([:b]) == [b: []]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads([b: [c: :d]]) == [b: [c: [d: []]]]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads([b: [:c, :d]]) == [b: [c: [], d: []]]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads([b: [c: [:d]]]) == [b: [c: [d: []]]]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads([b: [c: [:d, :e]]]) == [b: [c: [d: [], e: []]]]
+      assert Couchdb.Ecto.ResultProcessor.normalize_preloads([b: [c: [:d, :e]], f: :g]) == [b: [c: [d: [], e: []]], f: [g: []]]
     end
 
     test "get preload" do
@@ -925,7 +925,7 @@ defmodule RepoTest do
 
   end
 
-  describe "CouchdbAdapter.Repo" do
+  describe "Couchdb.Ecto.Repo" do
     test "get" do
       Repo.get(Post, "foo")
     end

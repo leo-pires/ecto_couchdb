@@ -1,6 +1,6 @@
-defmodule CouchdbAdapter.ResultProcessor do
+defmodule Couchdb.Ecto.ResultProcessor do
 
-  alias CouchdbAdapter.Fetchers
+  alias Couchdb.Ecto.Fetchers
 
   def process_result(type, result, repo, schema, opts) do
     preloads = opts |> Keyword.get(:preload, []) |> normalize_preloads
@@ -124,7 +124,7 @@ defmodule CouchdbAdapter.ResultProcessor do
     map
   end
   defp postprocess_wrap(map, %{as_map: false, schema: schema}) do
-    Ecto.Repo.Schema.load(CouchdbAdapter, schema, map)
+    Ecto.Repo.Schema.load(Couchdb.Ecto, schema, map)
   end
 
   defp field_name(field_str, :raw), do: field_str

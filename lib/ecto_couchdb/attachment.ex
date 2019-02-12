@@ -1,6 +1,6 @@
-defmodule CouchdbAdapter.Attachment do
+defmodule Couchdb.Ecto.Attachment do
 
-  alias CouchdbAdapter.Attachment
+  alias Couchdb.Ecto.Attachment
 
   @behaviour Ecto.Type
 

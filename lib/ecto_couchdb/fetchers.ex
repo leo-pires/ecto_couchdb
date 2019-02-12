@@ -1,8 +1,8 @@
 # TODO: create type for raise
 
-defmodule CouchdbAdapter.Fetchers do
+defmodule Couchdb.Ecto.Fetchers do
 
-  alias CouchdbAdapter.ResultProcessor
+  alias Couchdb.Ecto.ResultProcessor
 
 
   @type preload :: atom() | [atom()] | keyword(preload)
@@ -14,7 +14,7 @@ defmodule CouchdbAdapter.Fetchers do
   def get(repo, schema, id, opts \\ []) do
     {processor_opts, query} = opts |> split_fetch_options
     query = query |> Enum.into(%{})
-    with db_props <- CouchdbAdapter.db_props_for(repo),
+    with db_props <- Couchdb.Ecto.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.get(db_props, id, query)
     do
       {:ok, ResultProcessor.process_result(:get, data, repo, schema, processor_opts)}
@@ -38,8 +38,8 @@ defmodule CouchdbAdapter.Fetchers do
   def fetch_all(repo, schema, view_name, opts \\ []) do
     {processor_opts, query} = opts |> split_fetch_options
     query = query |> Enum.into(%{})
-    ddoc = CouchdbAdapter.ddoc_name(schema)
-    with db_props <- CouchdbAdapter.db_props_for(repo),
+    ddoc = Couchdb.Ecto.ddoc_name(schema)
+    with db_props <- Couchdb.Ecto.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, query)
     do
       {:ok, ResultProcessor.process_result(:fetch_all, data, repo, schema, processor_opts)}
@@ -54,8 +54,8 @@ defmodule CouchdbAdapter.Fetchers do
   @spec multiple_fetch_all(Ecto.Repo.t, Ecto.Schema.t, atom(), [map(), ...], fetch_options) :: {:ok, term()}
   def multiple_fetch_all(repo, schema, view_name, queries, opts \\ []) do
     {processor_opts, _} = opts |> split_fetch_options
-    ddoc = CouchdbAdapter.ddoc_name(schema)
-    with db_props <- CouchdbAdapter.db_props_for(repo),
+    ddoc = Couchdb.Ecto.ddoc_name(schema)
+    with db_props <- Couchdb.Ecto.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, queries)
     do
       {:ok, ResultProcessor.process_result(:multiple_fetch_all, data, repo, schema, processor_opts)}
@@ -70,7 +70,7 @@ defmodule CouchdbAdapter.Fetchers do
   @spec find(Ecto.Repo.t, Ecto.Schema.t, map(), find_options) :: term()
   def find(repo, schema, query, opts \\ []) do
     {processor_opts, _} = opts |> split_fetch_options
-    with db_props <- CouchdbAdapter.db_props_for(repo),
+    with db_props <- Couchdb.Ecto.db_props_for(repo),
          {:ok, query} <- fields_for_query(schema, query),
          {:ok, data} <- Couchdb.Connector.find(db_props, query)
     do

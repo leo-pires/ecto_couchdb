@@ -1,7 +1,7 @@
 # TODO: properly exceptions
 # TODO: typespec
 
-defmodule CouchdbAdapter.CouchdbFetchersRepoHelper do
+defmodule Couchdb.Ecto.RepoFetchersHelper do
 
   defmacro __using__(_args) do
 
@@ -9,25 +9,25 @@ defmodule CouchdbAdapter.CouchdbFetchersRepoHelper do
       contents = quote do
 
         def all(schema, view_name, opts \\ []) do
-          case CouchdbAdapter.Fetchers.fetch_all(unquote(__MODULE__), schema, view_name, opts) do
+          case Couchdb.Ecto.Fetchers.fetch_all(unquote(__MODULE__), schema, view_name, opts) do
             {:ok, data} -> data
             error -> error
           end
         end
 
         def multiple_all(schema, view_name, queries, opts \\ []) do
-          CouchdbAdapter.Fetchers.multiple_fetch_all(unquote(__MODULE__), schema, view_name, queries, opts)
+          Couchdb.Ecto.Fetchers.multiple_fetch_all(unquote(__MODULE__), schema, view_name, queries, opts)
         end
 
         def get(schema, id, opts \\ []) do
-          case CouchdbAdapter.Fetchers.get(unquote(__MODULE__), schema, id, opts) do
+          case Couchdb.Ecto.Fetchers.get(unquote(__MODULE__), schema, id, opts) do
             {:ok, data} -> data
             error -> error
           end
         end
 
         def get!(schema, id, opts \\ []) do
-          case CouchdbAdapter.Fetchers.get(unquote(__MODULE__), schema, id, opts) do
+          case Couchdb.Ecto.Fetchers.get(unquote(__MODULE__), schema, id, opts) do
             {:ok, nil} -> raise "not found"
             {:ok, data} -> data
             error -> error
@@ -35,7 +35,7 @@ defmodule CouchdbAdapter.CouchdbFetchersRepoHelper do
         end
 
         def one(schema, view_name, opts \\ []) do
-          case CouchdbAdapter.Fetchers.fetch_one(unquote(__MODULE__), schema, view_name, opts) do
+          case Couchdb.Ecto.Fetchers.fetch_one(unquote(__MODULE__), schema, view_name, opts) do
             {:ok, :many} -> raise "too many found"
             {:ok, data} -> data
             error -> error
@@ -43,7 +43,7 @@ defmodule CouchdbAdapter.CouchdbFetchersRepoHelper do
         end
 
         def one!(schema, view_name, opts \\ []) do
-          case CouchdbAdapter.Fetchers.fetch_one(unquote(__MODULE__), schema, view_name, opts) do
+          case Couchdb.Ecto.Fetchers.fetch_one(unquote(__MODULE__), schema, view_name, opts) do
             {:ok, nil} -> raise "not found"
             {:ok, :many} -> raise "too many found"
             {:ok, data} -> data
@@ -52,7 +52,7 @@ defmodule CouchdbAdapter.CouchdbFetchersRepoHelper do
         end
 
         def find(schema, query, opts \\ []) do
-          CouchdbAdapter.Fetchers.find(unquote(__MODULE__), schema, query, opts)
+          Couchdb.Ecto.Fetchers.find(unquote(__MODULE__), schema, query, opts)
         end
 
         def aggregate(a, b, c \\ []), do: unquote(__MODULE__).aggregate(a, b, c)
@@ -84,7 +84,7 @@ defmodule CouchdbAdapter.CouchdbFetchersRepoHelper do
       module =
           __MODULE__
           |> Atom.to_string
-          |> (Kernel.<> ".Couchdb")
+          |> (Kernel.<> ".FetchersHelper")
           |> String.to_atom
 
       Module.create(module, contents, __ENV__)
