@@ -19,8 +19,8 @@ defmodule Couchdb.Ecto do
     @default_pool_options |> Keyword.merge(config_options)
   end
 
-  def ensure_all_started(_repo, type) do
-    Application.ensure_all_started([:hackney], type)
+  def ensure_all_started(_repo, restart_type) do
+    Application.ensure_all_started(:hackney, restart_type)
   end
 
   # TODO: raise para id?
