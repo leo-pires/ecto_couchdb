@@ -2,7 +2,7 @@ ExUnit.start()
 
 defmodule Repo do
   use Ecto.Repo, otp_app: :ecto_couchdb
-  use CouchdbAdapter.Repo
+  use CouchdbAdapter.CouchdbFetchersRepoHelper
 end
 
 # Load support files

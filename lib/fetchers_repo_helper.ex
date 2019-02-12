@@ -1,7 +1,7 @@
 # TODO: properly exceptions
 # TODO: typespec
 
-defmodule CouchdbAdapter.Repo do
+defmodule CouchdbAdapter.CouchdbFetchersRepoHelper do
 
   defmacro __using__(_args) do
 
