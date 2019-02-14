@@ -1,4 +1,4 @@
-defmodule Couchdb.Ecto.MigrationsTest do
+      defmodule Couchdb.Ecto.MigrationsTest do
   use ExUnit.Case, async: false
   import TestSupport
   alias Couchdb.Ecto.Fetchers

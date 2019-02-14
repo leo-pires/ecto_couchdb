@@ -108,26 +108,21 @@ defmodule Couchdb.Ecto.Migration.Migrator do
       with {:ok, mod} <- find_migration_module(modules, file_or_mod),
            :ok <- do_change(version, mod)
       do
-        {:cont, [{:ok, version} | versions]}
+        {:cont, [version | versions]}
       else
-        _ -> {:halt, [{:error, version} | versions]}
+        _ -> {:halt, versions}
       end
     end)
   end
 
   defp write_trackings(versions, repo) do
-    Enum.reduce(versions, [], fn
-      ({:ok, version}, acc) ->
-        case MigrationModel.changeset(version) |> repo.insert do
-          {:ok, _} ->
-            [version | acc]
-          {:error, reason} ->
-            raise "Could not write migration tracking for #{version} (#{inspect reason})!"
-        end
-      ({:error, _}, acc) ->
-        acc
+    Enum.each(versions, fn version ->
+      {inserted, reason} = MigrationModel.changeset(version) |> repo.insert
+      if inserted == :error do
+        Logger.error("Could not write migration tracking for #{version} (#{inspect reason})")
+      end
     end)
-    |> Enum.reverse
+    versions
   end
 
   defp ensure_no_duplication([{_, version, name, _} | t]) do
@@ -172,8 +167,9 @@ defmodule Couchdb.Ecto.Migration.Migrator do
           apply(mod, :change, [])
           :ok
         rescue
-          reason ->
-            Logger.error("#{inspect mod} returned a error while executing (#{inspect reason})")
+          error ->
+            formated_error = Exception.format(:error, error, __STACKTRACE__)
+            Logger.error("#{inspect mod} returned a error while executing\n#{formated_error}")
             :error
         end
       end)

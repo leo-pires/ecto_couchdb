@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Couchdb.Migrations do
         # fetch migrations from database
         repo_status = Migrator.migrations(repo, path)
         # stop adapter
-        pid && repo.stop()
+        pid && repo.stop(pid)
         # prepare result
         """
         Repo: #{inspect(repo)}

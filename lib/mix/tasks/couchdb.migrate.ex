@@ -16,7 +16,7 @@ defmodule Mix.Tasks.Couchdb.Migrate do
       # run migrations
       migrated = Migrator.run(repo, path)
       # stop adapter and restart apps
-      pid && repo.stop()
+      pid && repo.stop(pid)
       restart_apps_if_migrated(apps, migrated)
     end
   end
