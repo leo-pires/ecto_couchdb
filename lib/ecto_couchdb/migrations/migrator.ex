@@ -168,7 +168,7 @@ defmodule Couchdb.Ecto.Migration.Migrator do
           :ok
         rescue
           error ->
-            formated_error = Exception.format(:error, error, __STACKTRACE__)
+            formated_error = Exception.format(:error, error, System.stacktrace())
             Logger.error("#{inspect mod} returned a error while executing\n#{formated_error}")
             :error
         end
