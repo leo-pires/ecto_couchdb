@@ -60,12 +60,16 @@ defmodule Couchdb.Ecto.ResultProcessor do
   end
 
   defp process_row(%{"key" => key, "doc" => doc}, payload) do
-    doc
-    |> process_doc(payload)
-    |> prepare_row_result(key, payload)
+    process_row(key, doc, payload)
   end
-  defp process_row(%{"key" => key, "value" => value}, payload) do
-    value
+  defp process_row(%{"key" => key, "value" => doc}, payload) do
+    process_row(key, doc, payload)
+  end
+  defp process_row(%{"id" => key, "doc" => doc}, payload) do
+    process_row(key, doc, payload)
+  end
+  defp process_row(key, doc, payload) do
+    doc
     |> process_doc(payload)
     |> prepare_row_result(key, payload)
   end
