@@ -25,20 +25,20 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec fetch_one(Ecto.Repo.t, Ecto.Schema.t, atom(), fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()} | no_return()
-  def fetch_one(repo, schema, view_name, opts \\ []) do
-    case fetch_all(repo, schema, view_name, opts) do
+  @spec fetch_one(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()} | no_return()
+  def fetch_one(repo, schema, view, opts \\ []) do
+    case fetch_all(repo, schema, view, opts) do
       {:ok, []} -> {:ok, nil}
       {:ok, [data]} -> {:ok, data}
       {:ok, _} -> {:ok, :many}
     end
   end
 
-  @spec fetch_all(Ecto.Repo.t, Ecto.Schema.t, atom(), fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()} | no_return()
-  def fetch_all(repo, schema, view_name, opts \\ []) do
+  @spec fetch_all(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()} | no_return()
+  def fetch_all(repo, schema, view, opts \\ []) do
     {processor_opts, query} = opts |> split_fetch_options
+    {ddoc, view_name} = split_ddoc_view_name(schema, view)
     query = query |> Enum.into(%{})
-    ddoc = Couchdb.Ecto.ddoc_name(schema)
     with db_props <- Couchdb.Ecto.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, query)
     do
@@ -51,10 +51,10 @@ defmodule Couchdb.Ecto.Fetchers do
   end
 
   # TODO: write spec
-  @spec multiple_fetch_all(Ecto.Repo.t, Ecto.Schema.t, atom(), [map(), ...], fetch_options) :: {:ok, term()}
-  def multiple_fetch_all(repo, schema, view_name, queries, opts \\ []) do
+  @spec multiple_fetch_all(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), [map(), ...], fetch_options) :: {:ok, term()}
+  def multiple_fetch_all(repo, schema, view, queries, opts \\ []) do
     {processor_opts, _} = opts |> split_fetch_options
-    ddoc = Couchdb.Ecto.ddoc_name(schema)
+    {ddoc, view_name} = split_ddoc_view_name(schema, view)
     with db_props <- Couchdb.Ecto.db_props_for(repo),
          {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, queries)
     do
@@ -95,5 +95,8 @@ defmodule Couchdb.Ecto.Fetchers do
   defp fields_for_query(_, query), do: {:ok, query}
 
   defp split_fetch_options(opts), do: opts |> Keyword.split([:preload, :as_map, :return_keys])
+
+  defp split_ddoc_view_name(_, {ddoc, view_name}), do: {ddoc, view_name}
+  defp split_ddoc_view_name(schema, view_name), do: {Couchdb.Ecto.ddoc_name(schema), view_name}
 
 end

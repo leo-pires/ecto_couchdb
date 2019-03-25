@@ -493,6 +493,21 @@ defmodule Couchdb.Ecto.RepoTest do
       assert (list |> Enum.at(1))._id == "id2"
     end
 
+    test "fetch one with custom ddoc" do
+      {:ok, u} = Fetchers.fetch_one(TestRepo, User, {:User, :all}, key: "test-user-id0")
+      assert u._id == "test-user-id0"
+      assert not is_nil(u._rev)
+      assert u.username == "bob"
+      assert u.email == "bob@gmail.com"
+    end
+
+    test "fetch one and all with custom ddoc" do
+      {:ok, list} = Fetchers.fetch_all(TestRepo, Post, {:Post, :all}, keys: ["id1", "id2"])
+      assert length(list) == 2
+      assert (list |> Enum.at(0))._id == "id1"
+      assert (list |> Enum.at(1))._id == "id2"
+    end
+
     test "raise if invalid view name" do
       assert_raise RuntimeError, fn -> Fetchers.fetch_all(TestRepo, Post, :xpto) end
     end
