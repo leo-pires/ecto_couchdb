@@ -52,6 +52,18 @@ defmodule Couchdb.Ecto.SchemaTest do
       }
     end
 
+    test "fetch unexisting ddoc", %{config_wrapper: config_wrapper} do
+      assert {:ok, :not_found} = Couchdb.Ecto.Storage.fetch_ddoc(config_wrapper, "xpto")
+    end
+
+    test "fetch existing ddoc", %{config_wrapper: config_wrapper} do
+      ddoc = "TestPost"
+      code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
+      {:ok, fetched} = Couchdb.Ecto.Storage.fetch_ddoc(config_wrapper, ddoc)
+      assert fetched == code
+    end
+
     test "create design doc", %{config_wrapper: config_wrapper} do
       ddoc = "TestPost"
       code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!

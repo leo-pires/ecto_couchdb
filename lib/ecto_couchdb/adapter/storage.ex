@@ -21,6 +21,15 @@ defmodule Couchdb.Ecto.Storage do
     end
   end
 
+  @spec fetch_ddoc(Ecto.Repo.t, String.t) :: {:ok, :not_found} | {:ok, map} | {:error, term()}
+  def fetch_ddoc(repo, ddoc) do
+    IO.inspect(["fetch_ddoc", repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.fetch_view(ddoc)])
+    # case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.fetch_view(ddoc) do
+    #   {:ok, doc} -> {:ok, doc |> Poison.decode!}
+    #   {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+    # end
+  end
+
   @spec create_ddoc(Ecto.Repo.t, String.t, String.t | map) :: {:ok, boolean} | {:error, term()}
   def create_ddoc(repo, ddoc, code) do
     case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.create_view(ddoc, code) |> as_map do
