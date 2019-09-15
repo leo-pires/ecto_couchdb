@@ -3,12 +3,13 @@ defmodule Couchdb.Ecto.SchemaTest do
   use ExUnit.Case, async: true
   import TestSupport
 
+  @ddoc "TestPost"
   @sample_ddoc %{
-    _id: nil,
-    language: "javascript",
-    views: %{
-      all: %{
-        map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
+    "_id" => @ddoc,
+    "language" => "javascript",
+    "views" => %{
+      "all" => %{
+        "map" => "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
       }
     }
   }
@@ -58,21 +59,26 @@ defmodule Couchdb.Ecto.SchemaTest do
 
     test "fetch existing ddoc", %{config_wrapper: config_wrapper} do
       ddoc = "TestPost"
-      code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
+      code = @sample_ddoc |> Poison.encode!
       assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
       {:ok, fetched} = Couchdb.Ecto.Storage.fetch_ddoc(config_wrapper, ddoc)
-      assert fetched == code
+      drop = ["_id", "_rev"]
+      assert fetched |> Map.drop(drop) == @sample_ddoc |> Map.drop(drop)
     end
 
     test "create design doc", %{config_wrapper: config_wrapper} do
       ddoc = "TestPost"
-      code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
+      code = @sample_ddoc |> Poison.encode!
       assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
+    end
+
+    test "drop unexisting design doc", %{config_wrapper: config_wrapper} do
+      assert {:ok, _} = Couchdb.Ecto.Storage.drop_ddoc(config_wrapper, "xpto")
     end
 
     test "drop design doc", %{config_wrapper: config_wrapper} do
       ddoc = "TestPost"
-      code = @sample_ddoc |> Map.put(:_id, ddoc) |> Poison.encode!
+      code = @sample_ddoc |> Poison.encode!
       assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
       assert {:ok, true} = Couchdb.Ecto.Storage.drop_ddoc(config_wrapper, ddoc)
     end

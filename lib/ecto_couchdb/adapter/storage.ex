@@ -8,7 +8,7 @@ defmodule Couchdb.Ecto.Storage do
     case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.Storage.storage_up |> as_map do
       {:ok, %{"ok" => true}} -> {:ok, true}
       {:error, %{"error" => "file_exists"}} -> {:ok, false}
-      {:error, reason} -> {:error, reason}
+      {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
     end
   end
 
@@ -17,17 +17,17 @@ defmodule Couchdb.Ecto.Storage do
     case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.Storage.storage_down |> as_map do
       {:ok, %{"ok" => true}} -> {:ok, true}
       {:error, %{"error" => "not_found"}} -> {:ok, false}
-      {:error, reason} -> {:error, reason}
+      {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
     end
   end
 
   @spec fetch_ddoc(Ecto.Repo.t, String.t) :: {:ok, :not_found} | {:ok, map} | {:error, term()}
   def fetch_ddoc(repo, ddoc) do
-    IO.inspect(["fetch_ddoc", repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.fetch_view(ddoc)])
-    # case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.fetch_view(ddoc) do
-    #   {:ok, doc} -> {:ok, doc |> Poison.decode!}
-    #   {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
-    # end
+    case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.fetch_view(ddoc) |> as_map do
+      {:ok, doc} -> {:ok, doc}
+      {:error, %{"error" => "not_found"}} -> {:ok, :not_found}
+      {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+    end
   end
 
   @spec create_ddoc(Ecto.Repo.t, String.t, String.t | map) :: {:ok, boolean} | {:error, term()}
@@ -40,8 +40,9 @@ defmodule Couchdb.Ecto.Storage do
 
   @spec drop_ddoc(Ecto.Repo.t, String.t) :: {:ok, boolean} | {:error, term()}
   def drop_ddoc(repo, ddoc) do
-    case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.drop_view(ddoc) |> as_map do
+    case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.drop_view(ddoc) do
       {:ok, %{"ok" => true}} -> {:ok, true}
+      {:error, %{"error" => "not_found"}} -> {:ok, :not_found}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
     end
   end
