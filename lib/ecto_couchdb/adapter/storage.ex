@@ -9,6 +9,7 @@ defmodule Couchdb.Ecto.Storage do
       {:ok, %{"ok" => true}} -> {:ok, true}
       {:error, %{"error" => "file_exists"}} -> {:ok, false}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -18,6 +19,7 @@ defmodule Couchdb.Ecto.Storage do
       {:ok, %{"ok" => true}} -> {:ok, true}
       {:error, %{"error" => "not_found"}} -> {:ok, false}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -27,6 +29,7 @@ defmodule Couchdb.Ecto.Storage do
       {:ok, doc} -> {:ok, doc}
       {:error, %{"error" => "not_found"}} -> {:ok, :not_found}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -35,6 +38,7 @@ defmodule Couchdb.Ecto.Storage do
     case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.create_view(ddoc, code) |> as_map do
       {:ok, %{"ok" => true}} -> {:ok, true}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -44,6 +48,7 @@ defmodule Couchdb.Ecto.Storage do
       {:ok, %{"ok" => true}} -> {:ok, true}
       {:error, %{"error" => "not_found"}} -> {:ok, :not_found}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -52,6 +57,7 @@ defmodule Couchdb.Ecto.Storage do
     case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.create_index(data) |> as_map do
       {:ok, %{"result" => _}} -> {:ok, true}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 
