@@ -32,9 +32,9 @@ defmodule CouchdbAdapter.Mixfile do
     [
       {:ecto, "~> 2.2.0"},
       {:couchdb_connector, github: "leo-pires/couchdb_connector", branch: "audo"},
-      {:dialyxir, "~> 0.5.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 0.9.1", only: [:dev, :test], runtime: false},
-      {:coverex, "~> 1.4.10", only: :test},
+      {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:coverex, "~> 1.5", only: :test},
     ]
   end
 end

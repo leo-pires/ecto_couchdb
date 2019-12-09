@@ -44,7 +44,7 @@ defmodule Couchdb.Ecto.Storage do
 
   @spec drop_ddoc(Ecto.Repo.t, String.t) :: {:ok, boolean} | {:error, term()}
   def drop_ddoc(repo, ddoc) do
-    case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.drop_view(ddoc) do
+    case repo |> Couchdb.Ecto.db_props_for |> Couchdb.Connector.View.drop_view(ddoc) |> as_map do
       {:ok, %{"ok" => true}} -> {:ok, true}
       {:error, %{"error" => "not_found"}} -> {:ok, :not_found}
       {:error, %{"error" => _, "reason" => reason}} -> {:error, reason}
