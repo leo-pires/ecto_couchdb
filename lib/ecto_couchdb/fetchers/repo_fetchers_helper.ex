@@ -62,7 +62,6 @@ defmodule Couchdb.Ecto.RepoFetchersHelper do
         def delete_all(a, b \\ []), do: unquote(__MODULE__).delete_all(a, b)
         def get_by(a, b, c \\ []), do: unquote(__MODULE__).get_by(a, b, c)
         def get_by!(a, b, c \\ []), do: unquote(__MODULE__).get_by!(a, b, c)
-        def in_transaction?(), do: unquote(__MODULE__).in_transaction?()
         def insert(a, b \\ []), do: unquote(__MODULE__).insert(a, b)
         def insert!(a, b \\ []), do: unquote(__MODULE__).insert!(a, b)
         def insert_all(a, b, c \\ []), do: unquote(__MODULE__).insert_all(a, b, c)
@@ -70,15 +69,16 @@ defmodule Couchdb.Ecto.RepoFetchersHelper do
         def insert_or_update!(a, b \\ []), do: unquote(__MODULE__).insert_or_update!(a, b)
         def load(a, b), do: unquote(__MODULE__).load(a, b)
         def preload(a, b, c \\ []), do: unquote(__MODULE__).preload(a, b, c)
-        def rollback(a), do: unquote(__MODULE__).rollback(a)
         def stop(a), do: unquote(__MODULE__).stop(a)
         def stop(a, b), do: unquote(__MODULE__).stop(a, b)
         def stream(a, b \\ []), do: unquote(__MODULE__).stream(a, b)
-        def transaction(a, b \\ []), do: unquote(__MODULE__).transaction(a, b)
         def update(a, b \\ []), do: unquote(__MODULE__).update(a, b)
         def update!(a, b \\ []), do: unquote(__MODULE__).update!(a, b)
         def update_all(a, b, c \\ []), do: unquote(__MODULE__).update_all(a, b, c)
 
+        # def in_transaction?(), do: unquote(__MODULE__).in_transaction?()
+        # def rollback(a), do: unquote(__MODULE__).rollback(a)
+        # def transaction(a, b \\ []), do: unquote(__MODULE__).transaction(a, b)
       end
 
       module =
