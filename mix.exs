@@ -2,7 +2,7 @@ defmodule CouchdbAdapter.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :couchdb_adapter,
+    [app: :ecto_couchdb,
      version: "0.1.0",
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
@@ -30,13 +30,11 @@ defmodule CouchdbAdapter.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:ecto, "~> 2.1.0"},
-      {:couchbeam_amuino, "~> 1.4.3-amuino.8"},
-      {:httpoison, "~> 0.13"},
-      {:mix_test_watch, "~> 0.2.6", only: :dev, runtime: false},
-      {:dialyxir, "~> 0.5.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 0.7.2", only: [:dev, :test], runtime: false},
-      {:coverex, "~> 1.4.10", only: :test},
+      {:ecto, "~> 2.2.0"},
+      {:couchdb_connector, github: "leo-pires/couchdb_connector", tag: "1.0"},
+      {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:coverex, "~> 1.5", only: :test},
     ]
   end
 end
