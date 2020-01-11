@@ -1,11 +1,10 @@
 defmodule Couchdb.Ecto.SchemaTest do
-
   use ExUnit.Case, async: true
   import TestSupport
 
-  @ddoc "TestPost"
-  @sample_ddoc %{
-    "_id" => @ddoc,
+  @ddoc_doc_id "TestPost"
+  @ddoc_doc_id_code %{
+    "_id" => @ddoc_doc_id,
     "language" => "javascript",
     "views" => %{
       "all" => %{
@@ -13,93 +12,93 @@ defmodule Couchdb.Ecto.SchemaTest do
       }
     }
   }
+  @index_code %{
+    index: %{
+      fields: ["name"]
+    },
+    ddoc: "TestPostIndex",
+    name: "test1"
+  }
+
 
   describe "storage" do
     setup do
-      config_wrapper = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
-      wrong_config_wrapper = config_wrapper |> put_in([:config, :database], "wrong_xpto_321")
-      config_wrapper |> clear_db!
-      %{
-        config_wrapper: config_wrapper,
-        wrong_config_wrapper: wrong_config_wrapper
-      }
+      config = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
+      wrong_config = config |> put_in([:config, :database], "wrong_xpto_321")
+      config |> clear_db!
+      %{config: config, wrong_config: wrong_config}
     end
 
-    test "drop db", %{config_wrapper: config_wrapper} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config_wrapper)
+    test "drop db", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config)
     end
 
-    test "doesnt drop db that doesnt exists", %{wrong_config_wrapper: wrong_config_wrapper} do
-      assert {:ok, false} = Couchdb.Ecto.Storage.delete_db(wrong_config_wrapper)
+    test "doesnt drop db that doesnt exists", %{wrong_config: wrong_config} do
+      assert {:ok, false} = Couchdb.Ecto.Storage.delete_db(wrong_config)
     end
 
-    test "create db", %{config_wrapper: config_wrapper} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config_wrapper)
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_db(config_wrapper)
+    test "create db", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config)
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_db(config)
     end
 
-    test "doesnt create db that already exists", %{config_wrapper: config_wrapper} do
-      assert {:ok, false} = Couchdb.Ecto.Storage.create_db(config_wrapper)
+    test "doesnt create db that already exists", %{config: config} do
+      assert {:ok, false} = Couchdb.Ecto.Storage.create_db(config)
     end
 
   end
 
-  describe "design docs and indexes" do
+  describe "design docs" do
+
     setup do
-      config_wrapper = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
-      config_wrapper |> clear_db!
-      %{
-        config_wrapper: config_wrapper
-      }
+      config = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
+      config |> clear_db!
+      %{config: config}
     end
 
-    test "fetch unexisting ddoc", %{config_wrapper: config_wrapper} do
-      assert {:ok, :not_found} = Couchdb.Ecto.Storage.fetch_ddoc(config_wrapper, "xpto")
+    test "fetch unexisting ddoc", %{config: config} do
+      assert {:ok, :not_found} = Couchdb.Ecto.Storage.fetch_ddoc(config, "xpto")
     end
 
-    test "fetch existing ddoc", %{config_wrapper: config_wrapper} do
-      ddoc = "TestPost"
-      code = @sample_ddoc |> Poison.encode!
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
-      {:ok, fetched} = Couchdb.Ecto.Storage.fetch_ddoc(config_wrapper, ddoc)
-      drop = ["_id", "_rev"]
-      assert fetched |> Map.drop(drop) == @sample_ddoc |> Map.drop(drop)
+    test "fetch existing ddoc", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config, @ddoc_doc_id, @ddoc_doc_id_code)
+      {:ok, fetched} = Couchdb.Ecto.Storage.fetch_ddoc(config, @ddoc_doc_id)
+      assert ICouch.Document.equal_content?(fetched, @ddoc_doc_id_code)
     end
 
-    test "create design doc", %{config_wrapper: config_wrapper} do
-      ddoc = "TestPost"
-      code = @sample_ddoc |> Poison.encode!
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
+    test "create design doc", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config, @ddoc_doc_id, @ddoc_doc_id_code)
     end
 
-    test "drop unexisting design doc", %{config_wrapper: config_wrapper} do
-      assert {:ok, _} = Couchdb.Ecto.Storage.drop_ddoc(config_wrapper, "xpto")
+    test "drop unexisting design doc", %{config: config} do
+      assert {:ok, _} = Couchdb.Ecto.Storage.drop_ddoc(config, "xpto")
     end
 
-    test "drop design doc", %{config_wrapper: config_wrapper} do
-      ddoc = "TestPost"
-      code = @sample_ddoc |> Poison.encode!
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, ddoc, code)
-      assert {:ok, true} = Couchdb.Ecto.Storage.drop_ddoc(config_wrapper, ddoc)
+    test "drop design doc", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config, @ddoc_doc_id, @ddoc_doc_id_code)
+      assert {:ok, true} = Couchdb.Ecto.Storage.drop_ddoc(config, @ddoc_doc_id)
     end
 
-    test "doesnt create invalid design doc", %{config_wrapper: config_wrapper} do
-      assert {:error, _} = Couchdb.Ecto.Storage.create_ddoc(config_wrapper, "", "")
+    test "doesnt create invalid design doc", %{config: config} do
+      assert {:error, _} = Couchdb.Ecto.Storage.create_ddoc(config, "", %{})
     end
 
-    test "create index", %{config_wrapper: config_wrapper} do
-      schema = %{
-        index: %{
-          fields: ["name"]
-        },
-        ddoc: "TestPostIndex",
-        name: "test1"
-      } |> Poison.encode!
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_index(config_wrapper, schema)
+  end
+
+  describe "indexes" do
+
+    setup do
+      config = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
+      config |> clear_db!
+      %{config: config}
     end
 
-    test "doesnt create invalid index", %{config_wrapper: config_wrapper} do
-      assert {:error, _} = Couchdb.Ecto.Storage.create_index(config_wrapper, "")
+    test "create index", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_index(config, @index_code)
+    end
+
+    test "doesnt create invalid index", %{config: config} do
+      assert {:error, _} = Couchdb.Ecto.Storage.create_index(config, %{})
     end
 
   end

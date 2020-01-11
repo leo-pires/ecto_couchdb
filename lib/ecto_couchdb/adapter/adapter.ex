@@ -1,29 +1,19 @@
-# TODO: pooling?
-
 defmodule Couchdb.Ecto do
 
   @behaviour Ecto.Adapter
   @behaviour Ecto.Adapter.Storage
 
-  @default_pool_options [max_connections: 20, timeout: 10_000]
 
+  defmacro __before_compile__(_env), do: :ok
 
-  defmacro __before_compile__(_env), do: nil
-
-  # TODO: esse pool está funcionando?
-  def child_spec(repo, _options) do
-    :hackney_pool.child_spec(repo, pool_config(repo.config))
-  end
-  defp pool_config(config) do
-    config_options = Keyword.take(config, [:max_connections, :timeout])
-    @default_pool_options |> Keyword.merge(config_options)
+  def child_spec(_repo, _options) do
+    Supervisor.Spec.supervisor(Supervisor, [[], [strategy: :one_for_one]])
   end
 
-  def ensure_all_started(_repo, restart_type) do
-    Application.ensure_all_started(:hackney, restart_type)
+  def ensure_all_started(_repo, _type) do
+    {:ok, []}
   end
 
-  # TODO: raise para id?
   def autogenerate(:id),        do: nil
   def autogenerate(:binary_id), do: nil
   def autogenerate(:embed_id),  do: Ecto.UUID.generate()
@@ -226,6 +216,14 @@ defmodule Couchdb.Ecto do
     end
   end
 
+  def server_connection_from_repo(repo) do
+    repo.config |> Keyword.get(:couchdb_url) |> ICouch.server_connection
+  end
+
+  def db_from_repo(repo) do
+    server_connection_from_repo(repo) |> ICouch.DB.new(repo.config |> Keyword.get(:database))
+  end
+
   @spec ddoc_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
   def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
   def ddoc_name(module), do: module.__schema__(:source)
@@ -307,9 +305,11 @@ defmodule Couchdb.Ecto do
     end
   end
 
+  ##
   # Storage behaviour
+  ##
+
   def storage_up(options) do
-    Application.ensure_all_started(:hackney)
     repo_wrap = %{config: options}
     case repo_wrap |> Couchdb.Ecto.Storage.create_db do
       {:ok, true} -> :ok
@@ -319,7 +319,6 @@ defmodule Couchdb.Ecto do
   end
 
   def storage_down(options) do
-    Application.ensure_all_started(:hackney)
     repo_wrap = %{config: options}
     case repo_wrap |> Couchdb.Ecto.Storage.delete_db do
       {:ok, true} -> :ok
