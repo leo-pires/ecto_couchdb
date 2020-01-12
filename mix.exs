@@ -19,8 +19,8 @@ defmodule CouchdbAdapter.Mixfile do
 
   defp deps do
     [
-      {:ecto, "~> 2.2.0"},
-      {:icouch, "~> 0.5"},
+      {:ecto, "~> 3.0"},
+      {:icouch, "~> 0.6"},
       {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
       {:coverex, "~> 1.5", only: :test},

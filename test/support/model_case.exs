@@ -1,9 +1,10 @@
-defmodule TestModelCase do
+defmodule Couchdb.Ecto.TestModelCase do
   use ExUnit.CaseTemplate
 
   using do
     quote do
 
+      import Couchdb.Ecto.Helpers
       import TestSupport
 
       @post_ddoc_id "Post"
@@ -96,6 +97,11 @@ defmodule TestModelCase do
       }
 
     end
+  end
+
+  setup do
+    TestSupport.clear_db!()
+    %{repo: TestRepo, db: TestRepo |> Couchdb.Ecto.Helpers.db_from_repo}
   end
 
 end

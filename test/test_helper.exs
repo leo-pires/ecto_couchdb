@@ -1,5 +1,3 @@
-ExUnit.start()
-
 Application.put_env(
   :ecto_couchdb,
   TestRepo, [
@@ -15,13 +13,15 @@ Application.put_env(
 )
 
 defmodule TestRepo do
-  use Ecto.Repo, otp_app: :ecto_couchdb
-  use Couchdb.Ecto.RepoFetchersHelper
+  use Ecto.Repo,
+    adapter: Couchdb.Ecto,
+    otp_app: :ecto_couchdb
+  use Couchdb.Ecto.RepoFetchers
 end
 
 # Load support files
 Path.wildcard("#{__DIR__}/support/**/*.exs") |> Enum.each(&Code.require_file(&1, __DIR__))
 
-{:ok, pid} = TestRepo.start_link()
-:ok = TestRepo.stop(pid, :infinity)
 {:ok, _pid} = TestRepo.start_link()
+
+ExUnit.start()

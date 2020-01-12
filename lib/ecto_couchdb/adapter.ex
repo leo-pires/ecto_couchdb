@@ -1,29 +1,44 @@
 defmodule Couchdb.Ecto do
-
   @behaviour Ecto.Adapter
+  @behaviour Ecto.Adapter.Schema
   @behaviour Ecto.Adapter.Storage
 
+  import Couchdb.Ecto.Helpers
 
+
+  ###
+  # Adapter behaviour
+  ###
+
+  @impl true
   defmacro __before_compile__(_env), do: :ok
 
-  def child_spec(_repo, _options) do
-    Supervisor.Spec.supervisor(Supervisor, [[], [strategy: :one_for_one]])
+  @impl true
+  def ensure_all_started(_repo, _type), do: {:ok, [:icouch]}
+
+  @impl true
+  def init(config) do
+    child_spec = Supervisor.Spec.supervisor(Supervisor, [[], [strategy: :one_for_one]])
+    adapter_meta = %{server: server_from_config(config), db: db_from_config(config)}
+    {:ok, child_spec, adapter_meta}
   end
 
-  def ensure_all_started(_repo, _type) do
-    {:ok, [:icouch]}
-  end
+  @impl true
+  def checkout(_adapter_meta, _config, function), do: function.()
 
-  def autogenerate(:id),        do: nil
-  def autogenerate(:binary_id), do: nil
-  def autogenerate(:embed_id),  do: Ecto.UUID.generate()
+  @impl true
+  def dumpers(_primitive_type, type), do: [type]
 
-  def loaders(:utc_datetime, type), do: [&load_utc_datetime/1, type]
+  @impl true
+  def loaders(:utc_datetime_usec, type), do: [&load_datetime/1, type]
+  def loaders(:utc_datetime, type), do: [&load_datetime/1, type]
+  def loaders(:naive_datetime_usec, type), do: [&load_naive_datetime/1, type]
   def loaders(:naive_datetime, type), do: [&load_naive_datetime/1, type]
   def loaders(:date, type), do: [&load_date/1, type]
+  def loaders(:time_usec, type), do: [&load_time/1, type]
   def loaders(:time, type), do: [&load_time/1, type]
-  def loaders(_, type), do: [type]
-  defp load_utc_datetime(datetime_str) do
+  def loaders(_primitive_type, type), do: [type]
+  defp load_datetime(datetime_str) do
     case DateTime.from_iso8601(datetime_str) do
       {:ok, datetime, _} -> {:ok, datetime}
       _ -> :error
@@ -47,44 +62,22 @@ defmodule Couchdb.Ecto do
       _ -> :error
     end
   end
-  def dumpers(:utc_datetime, type), do: [type, &dump_utc_datetime/1]
-  def dumpers(:naive_datetime, type), do: [type, &dump_naive_datetime/1]
-  def dumpers(:date, type), do: [type, &dump_date/1]
-  def dumpers(:time, type), do: [type, &dump_time/1]
-  def dumpers(_, type), do: [type]
-  defp dump_utc_datetime({{_, _, _} = dt, {h, m, s, ms}}) do
-    case NaiveDateTime.from_erl({dt, {h, m, s}}, {ms, 6}) do
-      {:ok, naive_datetime} ->
-        {:ok, datetime} = DateTime.from_naive(naive_datetime, "Etc/UTC")
-        {:ok, datetime |> DateTime.to_iso8601}
-      _ -> :error
-    end
-  end
-  defp dump_naive_datetime({{_, _, _} = dt, {h, m, s, ms}}) do
-    case NaiveDateTime.from_erl({dt, {h, m, s}}, {ms, 6}) do
-      {:ok, datetime} -> {:ok, datetime |> NaiveDateTime.to_iso8601}
-      _ -> :error
-    end
-  end
-  defp dump_date(dt) do
-    case Date.from_erl(dt) do
-      {:ok, date} -> {:ok, date}
-      _ -> :error
-    end
-  end
-  defp dump_time({h, m, s, ms}) do
-    case Time.from_erl({h, m, s}, {ms, 0}) do
-      {:ok, time} -> {:ok, time |> Time.to_iso8601}
-      _ -> :error
-    end
-  end
 
-  def insert(repo, schema_meta, fields, _on_conflict, returning, _options) do
-    db = repo |> db_from_repo
+  ###
+  # Schema behaviour
+  ###
+
+  @impl true
+  def autogenerate(:id),        do: raise "Unsupported id type"
+  def autogenerate(:binary_id), do: nil
+  def autogenerate(:embed_id),  do: Ecto.UUID.generate()
+
+  @impl true
+  def insert(%{db: db}, schema_meta, fields, _on_conflict, returning, _options) do
     type = ddoc_name(schema_meta)
     doc = prepare_for_couch(type, fields, schema_meta.schema)
     case db |> ICouch.save_doc(doc) do
-      {:ok, doc} -> {:ok, doc |> prepare_for_returning(returning)}
+      {:ok, doc} -> {:ok, doc |> prepare_for_return(returning)}
       {:error, :conflict} ->
         {:invalid, [unique: "#{type}_id_index"]}
       {:error, reason} ->
@@ -92,20 +85,20 @@ defmodule Couchdb.Ecto do
     end
   end
 
-  def update(repo, schema_meta, fields, filters, returning, options) do
-    db = repo |> db_from_repo
+  @impl true
+  def update(%{db: db} = adapter_meta, schema_meta, fields, filters, returning, options) do
     type = ddoc_name(schema_meta)
     with {:ok, fetched_doc} <- do_fetch_for_update(db, filters),
          changes = prepare_for_couch(type, fetched_doc, fields, schema_meta.schema),
          {:ok, doc} <- db |> ICouch.save_doc(changes)
     do
-      {:ok, doc |> prepare_for_returning(returning)}
+      {:ok, doc |> prepare_for_return(returning)}
     else
       {:error, :not_found} ->
         {:error, :stale}
       {:error, :stale} ->
         case handle_conflict(db, filters, options) do
-          {:ok, new_filters} -> update(repo, schema_meta, fields, new_filters, returning, options)
+          {:ok, new_filters} -> update(adapter_meta, schema_meta, fields, new_filters, returning, options)
           other -> other
         end
       {:error, reason} ->
@@ -122,8 +115,8 @@ defmodule Couchdb.Ecto do
     end
   end
 
-  def delete(repo, schema_meta, filters, options) do
-    db = repo |> db_from_repo
+  @impl true
+  def delete(%{db: db} = adapter_meta, schema_meta, filters, options) do
     id = filters |> Keyword.get(:_id)
     rev = filters |> Keyword.get(:_rev)
     case db |> ICouch.delete_doc(%{"_id" => id, "_rev" => rev}) do
@@ -131,8 +124,8 @@ defmodule Couchdb.Ecto do
       {:error, :not_found} ->
         {:ok, []}
       {:error, :conflict} ->
-        case handle_conflict(repo, filters, options) do
-          {:ok, new_filters} -> delete(repo, schema_meta, new_filters, options)
+        case handle_conflict(db, filters, options) do
+          {:ok, new_filters} -> delete(adapter_meta, schema_meta, new_filters, options)
           other -> other
         end
         {:error, :stale}
@@ -141,22 +134,14 @@ defmodule Couchdb.Ecto do
     end
   end
 
-  def insert_all(repo, schema_meta, _header, list, _on_conflict, _returning, _options) do
-    db = repo |> db_from_repo
+  @impl true
+  def insert_all(%{db: db}, schema_meta, _header, list, _on_conflict, _returning, _options) do
     type = ddoc_name(schema_meta)
     docs = list |> Enum.map(&(prepare_for_couch(type, &1, schema_meta.schema)))
     case db |> ICouch.save_docs(docs) do
       {:ok, docs} -> {docs |> length, nil}
       {:error, reason} -> raise "Error while inserting all (#{inspect(reason)})"
     end
-  end
-
-  def prepare(_atom, _query) do
-    raise "Unsupported operation by #{__MODULE__}: prepare"
-  end
-
-  def execute(_repo, _query_meta, _query, _params, _arg4, _options) do
-    raise "Unsupported operation by #{__MODULE__}: execute"
   end
 
   defp prepare_for_couch(type, existing_doc \\ ICouch.Document.new, new_fields, schema_meta) do
@@ -167,7 +152,7 @@ defmodule Couchdb.Ecto do
     end)
   end
 
-  defp prepare_for_returning(%ICouch.Document{} = doc, returning) do
+  defp prepare_for_return(%ICouch.Document{} = doc, returning) do
     returning |> Enum.map(fn field -> {field, doc |> ICouch.Document.get(field |> Atom.to_string, :error)} end)
   end
 
@@ -219,43 +204,34 @@ defmodule Couchdb.Ecto do
     %{"content_type" => content_type, "data" => data}
   end
 
-  #
-
-  def server_connection_from_repo(repo) do
-    repo.config |> Keyword.get(:couchdb_url) |> ICouch.server_connection
-  end
-
-  def db_from_repo(repo) do
-    server_connection_from_repo(repo) |> ICouch.DB.new(repo.config |> Keyword.get(:database))
-  end
-
-  def view_from_repo(repo, ddoc, view_name, params \\ []) do
-    %ICouch.View{db: db_from_repo(repo), ddoc: ddoc, name: view_name, params: params}
-  end
-
-  # TODO: não deveria ser type from_schema_meta?
-  @spec ddoc_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
-  def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
-  def ddoc_name(module), do: module.__schema__(:source)
-
   ##
   # Storage behaviour
   ##
 
-  def storage_up(options) do
-    repo_wrap = %{config: options}
-    case repo_wrap |> Couchdb.Ecto.Storage.create_db do
-      {:ok, true} -> :ok
-      {:ok, false} -> {:error, :already_up}
+  @impl true
+  def storage_status(options) do
+    case options |> db_from_config |> ICouch.db_info do
+      {:ok, _info} -> :up
+      {:error, :not_found} -> :down
       {:error, reason} -> {:error, reason}
     end
   end
 
+  @impl true
+  def storage_up(options) do
+    database_name = options |> Keyword.get(:database)
+    case options |> server_from_config |> ICouch.create_db(database_name) do
+      {:ok, _db} -> :ok
+      {:error, :precondition_failed} -> {:error, :already_up}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @impl true
   def storage_down(options) do
-    repo_wrap = %{config: options}
-    case repo_wrap |> Couchdb.Ecto.Storage.delete_db do
-      {:ok, true} -> :ok
-      {:ok, false} -> {:error, :already_down}
+    case options |> db_from_config |> ICouch.delete_db do
+      :ok -> :ok
+      {:error, :not_found} -> {:error, :already_down}
       {:error, reason} -> {:error, reason}
     end
   end

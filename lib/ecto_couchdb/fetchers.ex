@@ -1,6 +1,5 @@
-# TODO: include raise on types
-
 defmodule Couchdb.Ecto.Fetchers do
+  import Couchdb.Ecto.Helpers
   alias Couchdb.Ecto.ResultProcessor
 
   @type preload :: atom() | [atom()] | keyword(preload)
@@ -8,10 +7,11 @@ defmodule Couchdb.Ecto.Fetchers do
   @type fetch_options :: [preload: preload, return_keys: boolean()]
   @type find_options :: [preload: preload]
 
+
   @spec get(Ecto.Repo.t, Ecto.Schema.t, String.t, get_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()} | no_return()
   def get(repo, schema, id, opts \\ []) do
     {processor_opts, fetch_opts} = opts |> split_fetch_options
-    case repo |> Couchdb.Ecto.db_from_repo |> ICouch.open_doc(id, fetch_opts) do
+    case repo |> db_from_repo |> ICouch.open_doc(id, fetch_opts) do
       {:ok, doc} -> {:ok, ResultProcessor.process_result(:get, doc, repo, schema, processor_opts)}
       {:error, :not_found} -> {:ok, nil}
       {:error, :timeout} -> {:error, :timeout}
@@ -19,21 +19,21 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec fetch_one(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()} | no_return()
-  def fetch_one(repo, schema, view, opts \\ []) do
-    case fetch_all(repo, schema, view, opts) do
+  @spec one(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()} | no_return()
+  def one(repo, schema, view, opts \\ []) do
+    case all(repo, schema, view, opts) do
       {:ok, []} -> {:ok, nil}
       {:ok, [data]} -> {:ok, data}
       {:ok, _} -> {:ok, :many}
     end
   end
 
-  @spec fetch_all(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()} | no_return()
-  def fetch_all(repo, schema, view, opts \\ []) do
+  @spec all(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()} | no_return()
+  def all(repo, schema, view, opts \\ []) do
     {processor_opts, fetch_opts} = opts |> split_fetch_options
     {ddoc, view_name} = split_ddoc_view_name(schema, view)
-    case repo |> Couchdb.Ecto.view_from_repo(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
-      {:ok, view} -> {:ok, ResultProcessor.process_result(:fetch_all, view, repo, schema, processor_opts)}
+    case repo |> view_from_repo(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
+      {:ok, view} -> {:ok, ResultProcessor.process_result(:all, view, repo, schema, processor_opts)}
       {:error, :not_found} -> raise "View not found (#{ddoc}, #{view_name})"
       {:error, :timeout} -> {:error, :timeout}
       {:error, reason} -> raise "Could not fetch (#{inspect(reason)})"
@@ -41,16 +41,16 @@ defmodule Couchdb.Ecto.Fetchers do
   end
 
   # TODO: write spec
-  @spec multiple_fetch_all(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), [map(), ...], fetch_options) :: {:ok, term()}
-  def multiple_fetch_all(repo, schema, view, queries, processor_opts \\ []) do
+  @spec multiple_all(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), [map(), ...], fetch_options) :: {:ok, term()}
+  def multiple_all(repo, schema, view, queries, processor_opts \\ []) do
     {processor_opts, _} = processor_opts |> split_fetch_options
     {ddoc, view_name} = split_ddoc_view_name(schema, view)
     url = "_design/#{ddoc}/_view/#{view_name}/queries"
     body = %{queries: queries}
-    with {:ok, response} <- repo |> Couchdb.Ecto.db_from_repo |> ICouch.DB.send_req(url, :post, body),
-         {:ok, result} <- coerce_multiple_fetch_all_response(response)
+    with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req(url, :post, body),
+         {:ok, result} <- coerce_multiple_all_response(response)
     do
-      {:ok, ResultProcessor.process_result(:multiple_fetch_all, result, repo, schema, processor_opts)}
+      {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema, processor_opts)}
     else
       # TODO: check error for multiple fetch all!
       {:error, %{"error" => "not_found", "reason" => "missing_named_view"}} -> raise "View not found (#{ddoc}, #{view_name})"
@@ -58,7 +58,7 @@ defmodule Couchdb.Ecto.Fetchers do
       {:error, reason} -> raise "Could not fetch (#{inspect(reason)})"
     end
   end
-  defp coerce_multiple_fetch_all_response(%{"results" => raw_results}) do
+  defp coerce_multiple_all_response(%{"results" => raw_results}) do
     raw_results |> Enum.reduce_while([], fn %{"rows" => raw_rows} = raw_result, results_acc ->
       raw_rows |> Enum.reduce_while([], fn
         %{"doc" => raw_doc} = raw_row, rows_acc ->
@@ -92,7 +92,7 @@ defmodule Couchdb.Ecto.Fetchers do
   def find(repo, schema, opts \\ []) do
     {processor_opts, fetch_opts} = opts |> split_fetch_options
     query = fetch_opts |> Enum.into(%{})
-    with {:ok, response} <- repo |> Couchdb.Ecto.db_from_repo |> ICouch.DB.send_req("_find", :post, query),
+    with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req("_find", :post, query),
          {:ok, result} <- coerce_find_response(response)
     do
       {:ok, ResultProcessor.process_result(:find, result, repo, schema, processor_opts)}
@@ -124,6 +124,6 @@ defmodule Couchdb.Ecto.Fetchers do
   defp split_fetch_options(opts), do: opts |> Keyword.split([:preload, :return_keys])
 
   defp split_ddoc_view_name(_, {ddoc, view_name}), do: {ddoc, view_name}
-  defp split_ddoc_view_name(schema, view_name), do: {Couchdb.Ecto.ddoc_name(schema), view_name}
+  defp split_ddoc_view_name(schema, view_name), do: {ddoc_name(schema), view_name}
 
 end

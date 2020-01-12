@@ -1,70 +1,54 @@
 defmodule Couchdb.Ecto.RepoTest do
-  use ExUnit.Case, async: false
-  use TestModelCase
-  alias TestRepo.FetchersHelper, as: TestRepo
+  use Couchdb.Ecto.TestModelCase, async: false
   alias Couchdb.Ecto.Fetchers
   alias Couchdb.Ecto.Attachment
-
-  setup do
-    TestRepo |> clear_db!
-    %{
-      repo: TestRepo,
-      db: TestRepo |> Couchdb.Ecto.db_from_repo,
-      post: @post,
-      posts: @posts,
-      grants: @grants
-    }
-  end
 
 
   describe "insert" do
 
-    test "generates id/rev", %{post: post} do
-      {:ok, result} = TestRepo.insert(post)
+    test "generates id/rev" do
+      {:ok, result} = TestRepo.insert(@post)
       assert has_id_and_rev?(result)
     end
 
-    test "uses given generated id", %{post: post} do
-      post = struct(post, _id: "FOO")
+    test "uses given generated id" do
+      post = struct(@post, _id: "FOO")
       {:ok, result} = TestRepo.insert(post)
       assert has_id_and_rev?(result)
       assert result._id == "FOO"
       assert result.type == "Post"
     end
 
-    test "fails if using the same id twice", %{post: post} do
-      post = struct(post, _id: "FOO")
+    test "fails if using the same id twice" do
+      post = struct(@post, _id: "FOO")
       assert {:ok, _} = TestRepo.insert(post)
       exception = assert_raise Ecto.ConstraintError, fn -> TestRepo.insert(post) end
       assert exception.constraint == "Post_id_index"
     end
 
-    test "handles conflicts as changeset errors using unique_constraint", %{post: post} do
+    test "handles conflicts as changeset errors using unique_constraint" do
       import Ecto.Changeset
-      params = Map.from_struct(post)
-      changeset =
-        cast(%Post{}, %{params | _id: "FOO"}, [:title, :body, :_id])
-        |> unique_constraint(:id)
+      params = Map.from_struct(@post)
+      changeset = cast(%Post{}, %{params | _id: "FOO"}, [:title, :body, :_id]) |> unique_constraint(:id)
       assert {:ok, _} = TestRepo.insert(changeset)
       assert {:error, changeset} = TestRepo.insert(changeset)
-      assert changeset.errors[:id] != nil
-      assert changeset.errors[:id] == {"has already been taken", []}
+      assert changeset.errors[:id] == {"has already been taken", [constraint: :unique, constraint_name: "Post_id_index"]}
     end
 
-    test "supports embeds", %{post: post, grants: grants} do
-      post = struct(post, grants: grants)
+    test "supports embeds" do
+      post = struct(@post, grants: @grants)
       {:ok, result} = TestRepo.insert(post)
       assert has_id_and_rev?(result)
     end
 
-    test "supports embeds without ids", %{post: post} do
-      post = struct(post, stats: %Stats{visits: 12, time: 892})
+    test "supports embeds without ids" do
+      post = struct(@post, stats: %Stats{visits: 12, time: 892})
       {:ok, result} = TestRepo.insert(post)
       assert has_id_and_rev?(result)
     end
 
-    test "generates timestamps", %{post: post} do
-      {:ok, inserted} = TestRepo.insert(post)
+    test "generates timestamps" do
+      {:ok, inserted} = TestRepo.insert(@post)
       assert not is_nil(inserted.inserted_at)
       assert not is_nil(inserted.updated_at)
     end
@@ -72,10 +56,10 @@ defmodule Couchdb.Ecto.RepoTest do
 
   describe "update" do
 
-    setup %{posts: posts} do
-      TestRepo |> create_views!(@schema_design_docs)
-      TestRepo |> insert_docs!(posts)
-      {:ok, posts} = TestRepo |> Fetchers.fetch_all(Post, :all, include_docs: true)
+    setup do
+      create_views!(@schema_design_docs)
+      insert_docs!(@posts)
+      {:ok, posts} = Fetchers.all(TestRepo, Post, :all, include_docs: true)
       %{posts: posts}
     end
 
@@ -169,9 +153,9 @@ defmodule Couchdb.Ecto.RepoTest do
 
   describe "delete" do
 
-    setup %{posts: posts} do
-      TestRepo |> create_views!(@schema_design_docs)
-      posts_with_rev = TestRepo |> insert_docs!(posts)
+    setup do
+      create_views!(@schema_design_docs)
+      posts_with_rev = insert_docs!(@posts)
       %{docs: posts_with_rev}
     end
 
@@ -222,10 +206,10 @@ defmodule Couchdb.Ecto.RepoTest do
 
   describe "insert_all" do
 
-    setup(%{posts: posts}) do
-      TestRepo |> create_views!(@schema_design_docs)
+    setup do
+      create_views!(@schema_design_docs)
       posts =
-        Enum.map(posts, fn doc ->
+        Enum.map(@posts, fn doc ->
           %{doc |
             grants: Enum.map(doc.grants, &struct(Grant, &1)),
             stats: struct(Stats, doc.stats)
@@ -272,7 +256,7 @@ defmodule Couchdb.Ecto.RepoTest do
   describe "insert or update" do
 
     setup do
-      TestRepo |> create_views!(@schema_design_docs)
+      create_views!(@schema_design_docs)
       :ok
     end
 
@@ -289,7 +273,7 @@ defmodule Couchdb.Ecto.RepoTest do
     end
   end
 
-  describe "map as field" do
+  describe "map and arrays types" do
 
     defmodule F do
       use Ecto.Schema
@@ -343,6 +327,7 @@ defmodule Couchdb.Ecto.RepoTest do
         struct |> Ecto.Changeset.cast(params, [:x])
       end
     end
+
     test "array of map" do
       x = [
         %{"a1" => "a", "b2" => ["b"], "c1" => [%{"foo" => 1, "goo" => 2}, %{"foo" => 3, "goo" => 4}], "d1" => %{"bar" => 3}, "f1" => []},
@@ -353,6 +338,82 @@ defmodule Couchdb.Ecto.RepoTest do
       assert pf._id == pc._id
       assert pf.x == x
     end
+
+  end
+
+  describe "dates types" do
+
+    defmodule TestUTCDate do
+      use Ecto.Schema
+      @primary_key false
+      @foreign_key_type :binary_id
+      schema "Foo" do
+        field :_id, :binary_id, autogenerate: true, primary_key: true
+        field :_rev, :string, read_after_writes: true, primary_key: true
+        field :type, :string, read_after_writes: true
+        field :datetime_usec, :utc_datetime_usec
+        field :datetime, :utc_datetime
+        field :naive_datetime_usec, :naive_datetime_usec
+        field :naive_datetime, :naive_datetime
+        field :date, :date
+        field :time_usec, :time_usec
+        field :time, :time
+      end
+      def changeset(struct, params) do
+        struct |> Ecto.Changeset.cast(params, [:datetime_usec, :datetime, :naive_datetime_usec, :naive_datetime, :date, :time_usec, :time])
+      end
+    end
+
+    test "support date types", %{db: db} do
+      # prepare dates and times
+      datetime_usec = DateTime.utc_now
+      datetime_truncate = datetime_usec |> DateTime.truncate(:second)
+      naive_datetime_usec = NaiveDateTime.utc_now
+      naive_datetime_truncate = naive_datetime_usec |> NaiveDateTime.truncate(:second)
+      date = Date.utc_today
+      time_usec = Time.utc_now
+      time_truncate = time_usec |> Time.truncate(:second)
+      args = %{
+        datetime_usec: datetime_usec, datetime: datetime_usec,
+        naive_datetime_usec: naive_datetime_usec, naive_datetime: naive_datetime_usec,
+        date: date,
+        time_usec: time_usec, time: time_usec
+      }
+      # insert
+      i = TestUTCDate.changeset(%TestUTCDate{}, args) |> TestRepo.insert!
+      # check inserted
+      assert i._id == i._id
+      assert i.datetime_usec == datetime_usec
+      assert i.datetime == datetime_truncate
+      assert i.naive_datetime_usec == naive_datetime_usec
+      assert i.naive_datetime == naive_datetime_truncate
+      assert i.date == date
+      assert i.time_usec == time_usec
+      assert i.time == time_truncate
+      # check in db
+      assert {:ok, %{fields: f1}} = db |> ICouch.open_doc(i._id)
+      assert f1["_id"] == i._id
+      assert f1["_rev"] == i._rev
+      assert f1["datetime_usec"] == datetime_usec |> DateTime.to_iso8601
+      assert f1["datetime"] == datetime_truncate |> DateTime.to_iso8601
+      assert f1["naive_datetime_usec"] == naive_datetime_usec |> NaiveDateTime.to_iso8601
+      assert f1["naive_datetime"] == naive_datetime_truncate |> NaiveDateTime.to_iso8601
+      assert f1["date"] == date |> Date.to_iso8601
+      assert f1["time_usec"] == time_usec |> Time.to_iso8601
+      assert f1["time"] == time_truncate |> Time.to_iso8601
+      # check fetched
+      {:ok, f2} = Fetchers.get(TestRepo, TestUTCDate, i._id)
+      assert f2._id == i._id
+      assert f2._rev == i._rev
+      assert f2.datetime_usec == datetime_usec
+      assert f2.datetime == datetime_truncate
+      assert f2.naive_datetime_usec == naive_datetime_usec
+      assert f2.naive_datetime == naive_datetime_truncate
+      assert f2.date == date
+      assert f2.time_usec == time_usec
+      assert f2.time == time_truncate
+    end
+
   end
 
   describe "attachments" do
@@ -463,13 +524,13 @@ defmodule Couchdb.Ecto.RepoTest do
       assert af.other_attachment.data == ai.other_attachment.data
     end
 
-    test "fetch_one and fetch_all" do
-      TestRepo |> create_views!([@attachment_doc])
+    test "one and all" do
+      create_views!([@attachment_doc])
       attachment = %{content_type: "application/json", data: %{foo: "goo"}}
       ai = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment}) |> TestRepo.insert!
       # without_doc not returning attachment
-      {:ok, fetch_one1} = TestRepo |> Fetchers.fetch_one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true)
-      {:ok, fetch_all1} = TestRepo |> Fetchers.fetch_all(TestAttachment, :all_without_doc, include_docs: true)
+      {:ok, fetch_one1} = TestRepo |> Fetchers.one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true)
+      {:ok, fetch_all1} = TestRepo |> Fetchers.all(TestAttachment, :all_without_doc, include_docs: true)
       fetch_all1 = fetch_all1 |> hd
       assert fetch_one1._id == ai._id
       assert fetch_one1._rev == ai._rev
@@ -478,8 +539,8 @@ defmodule Couchdb.Ecto.RepoTest do
       assert fetch_all1._rev == ai._rev
       assert %Attachment{content_type: "application/json", data: nil} = fetch_all1.example_attachment
       # without_doc returning attachment
-      {:ok, fetch_one2} = TestRepo |> Fetchers.fetch_one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true, attachments: true)
-      {:ok, fetch_all2} = TestRepo |> Fetchers.fetch_all(TestAttachment, :all_without_doc, include_docs: true, attachments: true)
+      {:ok, fetch_one2} = TestRepo |> Fetchers.one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true, attachments: true)
+      {:ok, fetch_all2} = TestRepo |> Fetchers.all(TestAttachment, :all_without_doc, include_docs: true, attachments: true)
       fetch_all2 = fetch_all2 |> hd
       assert fetch_one2._id == ai._id
       assert fetch_one2._rev == ai._rev
@@ -490,8 +551,8 @@ defmodule Couchdb.Ecto.RepoTest do
       assert %Attachment{content_type: "application/json", data: %{"foo" => "goo"}} = fetch_one2.example_attachment
       assert fetch_all2.example_attachment.revpos == 1
       # with_doc
-      {:ok, fetch_one3} = TestRepo |> Fetchers.fetch_one(TestAttachment, :all_with_doc, key: ai._id, include_docs: true, attachments: true)
-      {:ok, fetch_all3} = TestRepo |> Fetchers.fetch_all(TestAttachment, :all_with_doc, include_docs: true, attachments: true)
+      {:ok, fetch_one3} = TestRepo |> Fetchers.one(TestAttachment, :all_with_doc, key: ai._id, include_docs: true, attachments: true)
+      {:ok, fetch_all3} = TestRepo |> Fetchers.all(TestAttachment, :all_with_doc, include_docs: true, attachments: true)
       fetch_all3 = fetch_all3 |> hd
       assert fetch_one3._id == ai._id
       assert fetch_one3._rev == ai._rev
@@ -520,50 +581,19 @@ defmodule Couchdb.Ecto.RepoTest do
 
   end
 
-  describe "UTC DateTime" do
-
-    defmodule TestUTCDate do
-      use Ecto.Schema
-      @primary_key false
-      @foreign_key_type :binary_id
-      schema "UTCDateTime" do
-        field :_id, :binary_id, autogenerate: true, primary_key: true
-        field :_rev, :string, read_after_writes: true, primary_key: true
-        field :type, :string, read_after_writes: true
-        field :date, :utc_datetime
-        field :example_attachment, Attachment
-        field :other_attachment, Attachment
-      end
-      def changeset(struct, params) do
-        struct |> Ecto.Changeset.cast(params, [:date])
-      end
-    end
-
-    test "support :utc_datetime" do
-      base_date = DateTime.utc_now()
-      di = TestUTCDate.changeset(%TestUTCDate{}, %{date: base_date}) |> TestRepo.insert!
-      assert di.date == base_date
-      {:ok, fi} = Fetchers.get(TestRepo, TestUTCDate, di._id)
-      assert fi._id == di._id
-      assert fi._rev == di._rev
-      assert fi.date == di.date
-    end
-
-  end
-
   describe "changeset" do
 
-    setup %{posts: posts} do
-      TestRepo |> create_views!(@schema_design_docs)
-      TestRepo |> insert_docs!(posts |> Enum.map(&(&1 |> Map.put(:user_id, "test-user"))))
+    setup do
+      create_views!(@schema_design_docs)
+      insert_docs!(@posts |> Enum.map(&(&1 |> Map.put(:user_id, "test-user"))))
       :ok
     end
 
     test "insert and update from changeset", %{} do
-      {:ok, list} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list} = Fetchers.all(TestRepo, User, :all)
       assert [] == list
       {:ok, ui} = User.changeset(%User{}, %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}) |> TestRepo.insert
-      {:ok, list} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list} = Fetchers.all(TestRepo, User, :all)
       assert [_] = list
       assert ui._id == "test-user-id"
       assert ui._rev
@@ -576,8 +606,9 @@ defmodule Couchdb.Ecto.RepoTest do
       assert ui.email == uq1.email
       assert ui.inserted_at == uq1.inserted_at
       assert ui.updated_at == uq1.updated_at
+      :timer.sleep(1000)
       {:ok, uu} = User.changeset(uq1, %{username: "silent bob", email: "silent.bob@gmail.com"}) |> TestRepo.update
-      {:ok, list_user} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert [_] = list_user
       {:ok, uq2} = Fetchers.get(TestRepo, User, "test-user-id")
       assert uu._id == uq1._id
@@ -594,20 +625,20 @@ defmodule Couchdb.Ecto.RepoTest do
     end
 
     test "cast_assoc" do
-      {:ok, list} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list} = Fetchers.all(TestRepo, User, :all)
       assert list == []
       {:ok, inserted} = Post.changeset_user(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}}) |> TestRepo.insert
       assert inserted.user_id == inserted.user._id
-      {:ok, list_user} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert [_] = list_user
     end
   end
 
   describe "integration tests" do
 
-    setup %{posts: posts} do
-      TestRepo |> create_views!(@schema_design_docs)
-      TestRepo |> insert_docs!(posts)
+    setup do
+      create_views!(@schema_design_docs)
+      insert_docs!(@posts)
       TestRepo.insert! %User{_id: "test-user-id0", username: "bob", email: "bob@gmail.com"}
       :ok
     end
@@ -626,14 +657,14 @@ defmodule Couchdb.Ecto.RepoTest do
     end
 
     test "update from get" do
-      {:ok, list_post} = Fetchers.fetch_all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
       assert length(list_post) == 3
-      {:ok, list_user} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert [_] = list_user
       pc = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id2", username: "alice", password: "alice@gmail.com"}}) |> TestRepo.insert!
-      {:ok, list_post} = Fetchers.fetch_all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert [_] = list_user
       {:ok, pf} = Fetchers.get(TestRepo, Post, pc._id)
       assert not is_nil(pf)
@@ -643,17 +674,17 @@ defmodule Couchdb.Ecto.RepoTest do
       assert pu._rev != pf._rev
       assert pu.title == "new lorem"
       assert pu.body == "new lorem ipsum"
-      {:ok, list_post} = Fetchers.fetch_all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert [_] = list_user
     end
 
     test "update including association from get" do
       pc = Post.changeset_user(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id3", username: "john", email: "john@gmail.com"}}) |> TestRepo.insert!
-      {:ok, list_post} = Fetchers.fetch_all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert length(list_user) == 2
       {:ok, pf1} = Fetchers.get(TestRepo, Post, pc._id, preload: :user)
       assert not is_nil(pf1)
@@ -666,9 +697,9 @@ defmodule Couchdb.Ecto.RepoTest do
       assert pf1.user.username == "john"
       assert pf1.user.email == "john@gmail.com"
       pu = TestRepo.update! Post.changeset_user(pf1, %{title: "new lorem", body: "new lorem ipsum", user: %{username: "doe", email: "doe@gmail.com"}})
-      {:ok, list_post} = Fetchers.fetch_all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.fetch_all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert length(list_user) == 2
       {:ok, pf2} = Fetchers.get(TestRepo, Post, pc._id, preload: :user)
       assert pf2.user_id == pc.user._id
@@ -693,18 +724,6 @@ defmodule Couchdb.Ecto.RepoTest do
       assert uf2.email == "doe@gmail.com"
     end
 
-    test "date and time cast" do
-      fooc = TestRepo.insert! %Foo{date: ~D[1969-07-20], time: ~T[16:20:42]}
-      {:ok, foof} = Fetchers.get(TestRepo, Foo, fooc._id)
-      assert fooc.date == foof.date
-      assert fooc.time == foof.time
-    end
-  end
-
-
-  defp has_id_and_rev?(resource) do
-    assert resource._id
-    assert resource._rev
   end
 
 end

@@ -1,87 +1,31 @@
 defmodule Couchdb.Ecto.StorageTest do
-  use ExUnit.Case, async: false
-  use TestModelCase
+  use Couchdb.Ecto.TestModelCase, async: false
 
 
   describe "storage" do
 
     setup do
-      config = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
-      wrong_config = config |> put_in([:config, :database], "wrong_xpto_321")
-      config |> clear_db!
-      %{config: config, wrong_config: wrong_config}
+      %{wrong_server_config: TestRepo.config |> Keyword.put(:couchdb_url, "http://127.0.0.1:9999/")}
     end
 
-    test "drop db", %{config: config} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config)
+    test "db status", %{wrong_server_config: wrong_server_config} do
+      assert :up = TestRepo.__adapter__.storage_status(TestRepo.config)
+      :ok = TestRepo |> db_from_repo |> ICouch.delete_db
+      assert :down = TestRepo.__adapter__.storage_status(TestRepo.config)
+      assert {:error, _} = TestRepo.__adapter__.storage_status(wrong_server_config)
     end
 
-    test "doesnt drop db that doesnt exists", %{wrong_config: wrong_config} do
-      assert {:ok, false} = Couchdb.Ecto.Storage.delete_db(wrong_config)
+    test "drop db", %{wrong_server_config: wrong_server_config} do
+      assert :ok = TestRepo.__adapter__.storage_down(TestRepo.config)
+      assert {:error, :already_down} = TestRepo.__adapter__.storage_down(TestRepo.config)
+      assert {:error, _} = TestRepo.__adapter__.storage_down(wrong_server_config)
     end
 
-    test "create db", %{config: config} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config)
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_db(config)
-    end
-
-    test "doesnt create db that already exists", %{config: config} do
-      assert {:ok, false} = Couchdb.Ecto.Storage.create_db(config)
-    end
-
-  end
-
-  describe "design docs" do
-
-    setup do
-      config = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
-      config |> clear_db!
-      %{config: config}
-    end
-
-    test "fetch unexisting ddoc", %{config: config} do
-      assert {:ok, :not_found} = Couchdb.Ecto.Storage.fetch_ddoc(config, "xpto")
-    end
-
-    test "fetch existing ddoc", %{config: config} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config, @ddoc_doc_id, @ddoc_doc_id_code)
-      {:ok, fetched} = Couchdb.Ecto.Storage.fetch_ddoc(config, @ddoc_doc_id)
-      assert ICouch.Document.equal_content?(fetched, @ddoc_doc_id_code)
-    end
-
-    test "create design doc", %{config: config} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config, @ddoc_doc_id, @ddoc_doc_id_code)
-    end
-
-    test "drop unexisting design doc", %{config: config} do
-      assert {:ok, _} = Couchdb.Ecto.Storage.drop_ddoc(config, "xpto")
-    end
-
-    test "drop design doc", %{config: config} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_ddoc(config, @ddoc_doc_id, @ddoc_doc_id_code)
-      assert {:ok, true} = Couchdb.Ecto.Storage.drop_ddoc(config, @ddoc_doc_id)
-    end
-
-    test "doesnt create invalid design doc", %{config: config} do
-      assert {:error, _} = Couchdb.Ecto.Storage.create_ddoc(config, "", %{})
-    end
-
-  end
-
-  describe "indexes" do
-
-    setup do
-      config = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
-      config |> clear_db!
-      %{config: config}
-    end
-
-    test "create index", %{config: config} do
-      assert {:ok, true} = Couchdb.Ecto.Storage.create_index(config, @index_code)
-    end
-
-    test "doesnt create invalid index", %{config: config} do
-      assert {:error, _} = Couchdb.Ecto.Storage.create_index(config, %{})
+    test "create db", %{wrong_server_config: wrong_server_config} do
+      assert {:error, :already_up} = TestRepo.__adapter__.storage_up(TestRepo.config)
+      :ok = TestRepo |> db_from_repo |> ICouch.delete_db
+      assert :ok = TestRepo.__adapter__.storage_up(TestRepo.config)
+      assert {:error, _} = TestRepo.__adapter__.storage_up(wrong_server_config)
     end
 
   end
