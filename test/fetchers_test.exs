@@ -129,6 +129,10 @@ defmodule Couchdb.Ecto.FetchersTest do
     end
 
     test "fetch_all with return_keys" do
+      {:ok, list} = Fetchers.fetch_all(TestRepo, Post, :all, return_keys: true)
+      assert [{"id1", %{"_id" => "id1"}}, {"id2", %{"_id" => "id2"}}, {"id3", %{"_id" => "id3"}}] = list
+      {:ok, list} = Fetchers.fetch_all(TestRepo, Post, :all, include_docs: true, return_keys: true)
+      assert [{"id1", %Post{_id: "id1"}}, {"id2", %Post{_id: "id2"}}, {"id3", %Post{_id: "id3"}}] = list
       {:ok, list} = Fetchers.fetch_all(TestRepo, User, :counts, group_level: 0, return_keys: true)
       assert list == [{nil, 4}]
     end

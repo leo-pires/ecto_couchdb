@@ -30,9 +30,14 @@ defmodule Couchdb.Ecto.ResultProcessor do
 
   def process_rows(rows, payload) when is_list(rows), do: rows |> Enum.map(&(process_row(&1, payload)))
 
-  defp process_row(%{"key" => _key, "doc" => doc}, payload), do: doc |> process_doc(payload)
-  defp process_row(%{"key" => key, "value" => value}, %{return_keys: true}), do: {key, value}
-  defp process_row(%{"key" => _key, "value" => value}, _payload), do: value
+  defp process_row(%{"key" => key, "doc" => doc}, payload) do
+    row_result(key, doc |> process_doc(payload), payload)
+  end
+  defp process_row(%{"key" => key, "value" => value}, payload) do
+    row_result(key, value, payload)
+  end
+  defp row_result(key, returning, %{return_keys: true}), do: {key, returning}
+  defp row_result(_key, returning, %{return_keys: false}), do: returning
 
   def process_docs(docs, payload) when is_list(docs), do: docs |> Enum.map(&(process_doc(&1, payload)))
 
