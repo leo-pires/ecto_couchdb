@@ -1,4 +1,4 @@
-defmodule Couchdb.Ecto.SchemaTest do
+defmodule Couchdb.Ecto.StorageTest do
   use ExUnit.Case, async: true
   import TestSupport
 
@@ -20,6 +20,34 @@ defmodule Couchdb.Ecto.SchemaTest do
     name: "test1"
   }
 
+
+  describe "storage" do
+
+    setup do
+      config = %{config: TestRepo.config |> Keyword.put(:database, "xpto_123")}
+      wrong_config = config |> put_in([:config, :database], "wrong_xpto_321")
+      config |> clear_db!
+      %{config: config, wrong_config: wrong_config}
+    end
+
+    test "drop db", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config)
+    end
+
+    test "doesnt drop db that doesnt exists", %{wrong_config: wrong_config} do
+      assert {:ok, false} = Couchdb.Ecto.Storage.delete_db(wrong_config)
+    end
+
+    test "create db", %{config: config} do
+      assert {:ok, true} = Couchdb.Ecto.Storage.delete_db(config)
+      assert {:ok, true} = Couchdb.Ecto.Storage.create_db(config)
+    end
+
+    test "doesnt create db that already exists", %{config: config} do
+      assert {:ok, false} = Couchdb.Ecto.Storage.create_db(config)
+    end
+
+  end
 
   describe "design docs" do
 

@@ -11,7 +11,7 @@ defmodule Couchdb.Ecto do
   end
 
   def ensure_all_started(_repo, _type) do
-    {:ok, []}
+    {:ok, [:icouch]}
   end
 
   def autogenerate(:id),        do: nil
@@ -80,140 +80,89 @@ defmodule Couchdb.Ecto do
   end
 
   def insert(repo, schema_meta, fields, _on_conflict, returning, _options) do
-    db_props = db_props_for(repo)
+    db = repo |> db_from_repo
     type = ddoc_name(schema_meta)
-    {id, doc} =
-      prepare_for_couch(%{}, fields, schema_meta.schema)
-      |> Map.put("type", type)
-      |> Map.pop("_id")
-    with {:ok, %{payload: payload}} <- do_create(db_props, doc, id)
+    with doc = prepare_for_couch(type, fields, schema_meta.schema),
+         {:ok, doc} <- db |> ICouch.save_doc(doc)
     do
-      payload |> prepare_for_returning(type, returning)
+      {:ok, doc |> prepare_for_returning(returning)}
     else
-      {:error, %{payload: %{"error" => "conflict"}}} ->
+      {:error, :conflict} ->
         {:invalid, [unique: "#{type}_id_index"]}
       {:error, reason} ->
         raise "Error while inserting (#{inspect(reason)})"
     end
   end
-  defp do_create(db_props, doc, nil) do
-    Couchdb.Connector.create_generate(db_props, doc)
-  end
-  defp do_create(db_props, doc, id) do
-    Couchdb.Connector.create(db_props, doc, id)
-  end
 
   def update(repo, schema_meta, fields, filters, returning, options) do
-    db_props = db_props_for(repo)
+    db = repo |> db_from_repo
     type = ddoc_name(schema_meta)
-    with {:ok, fetched_doc} <- do_fetch_for_update(db_props, filters),
-         {:ok, %{payload: payload}} <- do_update(db_props, fetched_doc, fields, schema_meta)
+    with {:ok, fetched_doc} <- do_fetch_for_update(db, filters),
+         changes = prepare_for_couch(type, fetched_doc, fields, schema_meta.schema),
+         {:ok, doc} <- db |> ICouch.save_doc(changes)
     do
-      payload |> prepare_for_returning(type, returning)
+      {:ok, doc |> prepare_for_returning(returning)}
     else
-      {:error, %{"error" => "not_found"}} ->
+      {:error, :not_found} ->
         {:error, :stale}
       {:error, :stale} ->
-        with {:ok, new_filters} <- handle_conflict(repo, filters, options)
-        do
-          update(repo, schema_meta, fields, new_filters, returning, options)
+        case handle_conflict(db, filters, options) do
+          {:ok, new_filters} -> update(repo, schema_meta, fields, new_filters, returning, options)
+          other -> other
         end
       {:error, reason} ->
         raise "Error while updating (#{inspect(reason)})"
     end
   end
-  defp do_fetch_for_update(db_props, filters) do
-    with {:ok, doc} <- Couchdb.Connector.get(db_props, filters[:_id])
-    do
-      if doc["_rev"] == filters[:_rev] do
-        {:ok, doc}
-      else
-        {:error, :stale}
-      end
+  defp do_fetch_for_update(db, filters) do
+    id = filters[:_id]
+    rev = filters[:_rev]
+    case db |> ICouch.open_doc(id) do
+      {:ok, %ICouch.Document{rev: ^rev} = doc} -> {:ok, doc}
+      {:ok, _doc} -> {:error, :stale}
+      other -> other
     end
-  end
-  defp do_update(db_props, fetched_doc, updated_fields, schema_meta) do
-    updated_doc = prepare_for_couch(fetched_doc, updated_fields, schema_meta.schema)
-    db_props |> Couchdb.Connector.update(updated_doc)
   end
 
   def delete(repo, schema_meta, filters, options) do
-    db_props = db_props_for(repo)
-    type = ddoc_name(schema_meta)
+    db = repo |> db_from_repo
     id = filters |> Keyword.get(:_id)
     rev = filters |> Keyword.get(:_rev)
-    with {:ok, %{payload: payload}} <- do_delete(db_props, id, rev)
+    with {:ok, _doc} <- db |> ICouch.delete_doc(%{"_id" => id, "_rev" => rev})
     do
-      # TODO: check what delete should return
-      payload |> prepare_for_returning(type, [])
+      {:ok, []}
     else
-      {:error, %{payload: %{"error" => "not_found"}}} ->
+      {:error, :not_found} ->
         {:ok, []}
-      {:error, %{payload: %{"error" => "conflict"}}} ->
-        with {:ok, new_filters} <- handle_conflict(repo, filters, options)
-        do
-          delete(repo, schema_meta, new_filters, options)
+      {:error, :conflict} ->
+        case handle_conflict(repo, filters, options) do
+          {:ok, new_filters} -> delete(repo, schema_meta, new_filters, options)
+          other -> other
         end
         {:error, :stale}
       {:error, reason} ->
         raise "Error while deleting (#{inspect(reason)})"
     end
   end
-  defp do_delete(db_props, id, rev) do
-    Couchdb.Connector.destroy(db_props, id, rev)
-  end
 
-  # TODO: check what to return in second parameter
-  def insert_all(repo, schema_meta, _header, list, _on_conflict, returning, _options) do
-    db_props = db_props_for(repo)
+  def insert_all(repo, schema_meta, _header, list, _on_conflict, _returning, _options) do
+    db = repo |> db_from_repo
     type = ddoc_name(schema_meta)
-    prepared = list |> do_prepare_insert_all(type, schema_meta.schema)
-    with {:ok, %{payload: data}} <- do_insert_all(db_props, prepared)
+    with docs = list |> Enum.map(&(prepare_for_couch(type, &1, schema_meta.schema))),
+         {:ok, docs} <- db |> ICouch.save_docs(docs)
     do
-      {_return, count} =
-        data
-        |> Enum.map_reduce(0, fn (doc_return, acc) ->
-             case doc_return |> prepare_for_returning(nil, returning) do
-               {:ok, return_kw} -> {return_kw, acc + 1}
-               {:error, _} -> {[], acc}
-             end
-           end)
-      {count, nil}
+      {docs |> length, nil}
     else
-      {:error, reason} ->
-        raise "Error while deleting (#{inspect(reason)})"
+      {:error, reason} -> raise "Error while inserting all (#{inspect(reason)})"
     end
-  end
-  defp do_prepare_insert_all(list, type, schema) do
-    list |> Enum.map(&(prepare_for_couch(%{}, &1, schema) |> Map.put("type", type)))
-  end
-  defp do_insert_all(db_props, list) do
-    Couchdb.Connector.bulk_docs(db_props, list)
   end
 
   def prepare(_atom, _query) do
-    raise "Unsupported operation in CouchdbAdapter: prepare"
+    raise "Unsupported operation by #{__MODULE__}: prepare"
   end
 
   def execute(_repo, _query_meta, _query, _params, _arg4, _options) do
-    raise "Unsupported operation in CouchdbAdapter: execute"
-  end
-
-  @spec db_props_for(Ecto.Repo.t) :: Types.db_properties
-  def db_props_for(repo) do
-    config = repo.config
-    protocol = Keyword.get(config, :protocol, "http")
-    hostname = Keyword.get(config, :hostname, "localhost")
-    port = Keyword.get(config, :port, 5984)
-    database = Keyword.get(config, :database)
-    username = Keyword.get(config, :username) || Keyword.get(config, :user)
-    password = Keyword.get(config, :password)
-    props = %{protocol: protocol, hostname: hostname, port: port, database: database}
-    if username && password do
-      props |> Map.merge(%{user: username, password: password})
-    else
-      props
-    end
+    raise "Unsupported operation by #{__MODULE__}: execute"
   end
 
   def server_connection_from_repo(repo) do
@@ -224,27 +173,28 @@ defmodule Couchdb.Ecto do
     server_connection_from_repo(repo) |> ICouch.DB.new(repo.config |> Keyword.get(:database))
   end
 
+  def view_from_repo(repo, ddoc, view_name, params \\ []) do
+    %ICouch.View{db: db_from_repo(repo), ddoc: ddoc, name: view_name, params: params}
+  end
+
+  # TODO: não deveria ser type from_schema_meta?
   @spec ddoc_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
   def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
   def ddoc_name(module), do: module.__schema__(:source)
 
-  @spec prepare_for_couch(map, keyword | map, Ecto.Adapter.schema_meta) :: map
-  defp prepare_for_couch(fetched_doc, new_fields, schema_meta) do
-    {attachments, new_fields} = split_attachments(fetched_doc, new_fields, schema_meta)
+  defp prepare_for_couch(type, existing_doc \\ ICouch.Document.new, new_fields, schema_meta) do
+    {attachments, regular_fields} = split_attachments(existing_doc, new_fields, schema_meta)
     attachments = prepare_attachments(attachments)
-    new_fields = new_fields |> Enum.map(fn {k, v} -> {k |> to_string, v} end) |> Map.new
-    fetched_doc
-    |> Map.merge(new_fields)
-    |> Map.merge(%{"_attachments" => attachments})
+    [{:type, type}, {:_attachments, attachments} | regular_fields] |> Enum.reduce(existing_doc, fn {k, v}, doc ->
+      doc |> ICouch.Document.put(k |> Atom.to_string, v)
+    end)
   end
 
   defp split_attachments(fetched_doc, all_fields, schema) do
     # split attachment and fields
-    {new_attachments, new_fields} =
-      all_fields
-      |> Enum.split_with(fn {k, _} ->
-          schema.__schema__(:type, k) == Couchdb.Ecto.Attachment
-         end)
+    {new_attachments, new_fields} = all_fields |> Enum.split_with(fn {k, _} ->
+      schema.__schema__(:type, k) == Couchdb.Ecto.Attachment
+    end)
     # merge existing attachments and new ones
     old_attachments = fetched_doc["_attachments"] || %{}
     new_attachments_names = new_attachments |> Enum.map(fn {k, _} -> k |> to_string end)
@@ -256,11 +206,10 @@ defmodule Couchdb.Ecto do
     {all_attachments, new_fields}
   end
   defp prepare_attachments(attachments) do
-    attachments
-    |> Enum.reduce(%{}, fn
-         ({_, nil}, acc) -> acc
-         ({k, v}, acc) -> Map.put(acc, k |> to_string, prepare_attachment(v))
-       end)
+    attachments |> Enum.reduce(%{}, fn
+      {_, nil}, acc -> acc
+      {k, v}, acc -> Map.put(acc, k |> to_string, prepare_attachment(v))
+    end)
   end
   defp prepare_attachment(%{"content_type" => content_type, "stub" => true}) do
     do_prepare_attachment(content_type, nil)
@@ -275,30 +224,16 @@ defmodule Couchdb.Ecto do
     %{"content_type" => content_type, "data" => data}
   end
 
-  @spec prepare_for_returning(keyword, String.t | nil, keyword) :: keyword
-  defp prepare_for_returning(%{"ok" => true} = payload, type, returning) do
-    %{_id: payload["id"], _rev: payload["rev"], type: type}
-    |> do_prepare_for_returning(returning)
-  end
-  defp prepare_for_returning(_, _, _) do
-    {:error, nil}
-  end
-  defp do_prepare_for_returning(data, returning) do
-    return =
-      returning
-      |> Enum.map(&({&1, Map.get(data, &1)}))
-      |> Keyword.new
-    {:ok, return}
+  defp prepare_for_returning(%ICouch.Document{} = doc, returning) do
+    returning |> Enum.map(fn field -> {field, doc |> ICouch.Document.get(field |> Atom.to_string, :error)} end)
   end
 
-  defp handle_conflict(repo, filters, options) do
+  defp handle_conflict(db, filters, options) do
+    id = filters[:_id]
     if Keyword.get(options, :on_conflict) == :replace_all do
-      case db_props_for(repo) |> Couchdb.Connector.get(filters[:_id]) do
-        {:ok, doc} ->
-          rev = doc["_rev"]
-          {:ok, filters |> Keyword.put(:_rev, rev)}
-        _ ->
-          {:error, :stale}
+      case db |> ICouch.get_doc_rev(id) do
+        {:ok, rev} -> {:ok, filters |> Keyword.put(:_rev, rev)}
+        _other -> {:error, :stale}
       end
     else
       {:error, :stale}

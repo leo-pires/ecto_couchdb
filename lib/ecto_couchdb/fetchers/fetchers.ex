@@ -12,14 +12,12 @@ defmodule Couchdb.Ecto.Fetchers do
 
   @spec get(Ecto.Repo.t, Ecto.Schema.t, String.t, get_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()} | no_return()
   def get(repo, schema, id, opts \\ []) do
-    {processor_opts, query} = opts |> split_fetch_options
-    query = query |> Enum.into(%{})
-    with db_props <- Couchdb.Ecto.db_props_for(repo),
-         {:ok, data} <- Couchdb.Connector.get(db_props, id, query)
+    {processor_opts, fetch_opts} = opts |> split_fetch_options
+    with {:ok, doc} <- repo |> Couchdb.Ecto.db_from_repo |> ICouch.open_doc(id, fetch_opts)
     do
-      {:ok, ResultProcessor.process_result(:get, data, repo, schema, processor_opts)}
+      {:ok, ResultProcessor.process_result(:get, doc, repo, schema, processor_opts)}
     else
-      {:error, %{"error" => "not_found"}} -> {:ok, nil}
+      {:error, :not_found} -> {:ok, nil}
       {:error, :timeout} -> {:error, :timeout}
       {:error, reason} -> raise "Could not get (#{inspect(reason)})"
     end
@@ -36,15 +34,11 @@ defmodule Couchdb.Ecto.Fetchers do
 
   @spec fetch_all(Ecto.Repo.t, Ecto.Schema.t, {atom(), atom()} | atom(), fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()} | no_return()
   def fetch_all(repo, schema, view, opts \\ []) do
-    {processor_opts, query} = opts |> split_fetch_options
+    {processor_opts, fetch_opts} = opts |> split_fetch_options
     {ddoc, view_name} = split_ddoc_view_name(schema, view)
-    query = query |> Enum.into(%{})
-    with db_props <- Couchdb.Ecto.db_props_for(repo),
-         {:ok, data} <- Couchdb.Connector.fetch_all(db_props, ddoc, view_name, query)
-    do
-      {:ok, ResultProcessor.process_result(:fetch_all, data, repo, schema, processor_opts)}
-    else
-      {:error, %{"error" => "not_found"}} -> raise "View not found (#{ddoc}, #{view_name})"
+    case repo |> Couchdb.Ecto.view_from_repo(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
+      {:ok, view} -> {:ok, ResultProcessor.process_result(:fetch_all, view, repo, schema, processor_opts)}
+      {:error, :not_found} -> raise "View not found (#{ddoc}, #{view_name})"
       {:error, :timeout} -> {:error, :timeout}
       {:error, reason} -> raise "Could not fetch (#{inspect(reason)})"
     end
