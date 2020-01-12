@@ -1,24 +1,6 @@
 defmodule Couchdb.Ecto.StorageTest do
-  use ExUnit.Case, async: true
-  import TestSupport
-
-  @ddoc_doc_id "TestPost"
-  @ddoc_doc_id_code %{
-    "_id" => @ddoc_doc_id,
-    "language" => "javascript",
-    "views" => %{
-      "all" => %{
-        "map" => "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
-      }
-    }
-  }
-  @index_code %{
-    index: %{
-      fields: ["name"]
-    },
-    ddoc: "TestPostIndex",
-    name: "test1"
-  }
+  use ExUnit.Case, async: false
+  use TestModelCase
 
 
   describe "storage" do

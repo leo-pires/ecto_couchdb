@@ -46,7 +46,7 @@ defmodule Couchdb.Ecto.Storage do
           {:ok, _doc_map} -> {:ok, true}
           other -> other
         end
-      {:error, :not_found} ->{:ok, :not_found}
+      {:error, :not_found} -> {:ok, :not_found}
       other -> other
     end
   end

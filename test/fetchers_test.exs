@@ -1,86 +1,24 @@
 defmodule Couchdb.Ecto.FetchersTest do
-  use ExUnit.Case, async: true
-  import TestSupport
+  use ExUnit.Case, async: false
+  use TestModelCase
   alias TestRepo.FetchersHelper, as: TestRepo
   alias Couchdb.Ecto.Fetchers
-  alias Couchdb.Ecto.Attachment
-
-  @post_ddoc_id "Post"
-  @post_ddoc_code %{
-    views: %{
-      all: %{
-        map: "function(doc) { if (doc.type === 'Post') emit(doc._id, doc) }"
-      },
-      by_user_id: %{
-        map: "function(doc) { if (doc.type === 'Post' && doc.user_id) emit(doc.user_id, doc) }"
-      }
-    }
-  }
-  @user_ddoc_id "User"
-  @user_ddoc_code %{
-    views: %{
-      all: %{
-        map: "function(doc) { if (doc.type === 'User') emit(doc._id, doc) }"
-      },
-      all_no_doc: %{
-        map: "function(doc) { if (doc.type === 'User') emit(doc._id, null) }"
-      },
-      counts: %{
-        map: "function(doc) { emit(doc._id, 1) }",
-        reduce: "_count"
-      }
-    }
-  }
-  @user_data_ddoc_id "UserData"
-  @user_data_ddoc_code %{
-    views: %{
-      all: %{
-        map: "function(doc) { if (doc.type === 'UserData') emit(doc.user_id, doc) }"
-      },
-      by_user_id: %{
-        map: "function(doc) { if (doc.type === 'UserData' && doc.user_id) emit(doc.user_id, doc) }"
-      }
-    }
-  }
-  @design_docs [
-    {@post_ddoc_id, @post_ddoc_code},
-    {@user_ddoc_id, @user_ddoc_code},
-    {@user_data_ddoc_id, @user_data_ddoc_code}
-  ]
-  @post %Post{title: "how to write and adapter", body: "Don't know yet"}
-  @grants [%Grant{user: "admin", access: "all"}, %Grant{user: "other", access: "read"}]
 
   setup do
     TestRepo |> clear_db!
-    posts =
-      for i <- 1..3 do
-        %{
-          _id: "id#{i}",
-          type: "Post",
-          title: "t#{i}",
-          body: "b#{i}",
-          stats: %{visits: i, time: 10 * i},
-          grants: [
-            %{id: "1", user: "u#{i}.1", access: "a#{i}.1"},
-            %{id: "2", user: "u#{i}.2", access: "a#{i}.2"}
-          ]
-        }
-      end
     %{
       repo: TestRepo,
       db: TestRepo |> Couchdb.Ecto.db_from_repo,
-      db_props: TestRepo |> Couchdb.Ecto.db_props_for,
-      design_docs: @design_docs,
       post: @post,
-      posts: posts,
+      posts: @posts,
       grants: @grants
     }
   end
 
 
-  describe "get and fetch" do
-    setup %{design_docs: design_docs, posts: posts} do
-      TestRepo |> create_views!(design_docs)
+  describe "get" do
+
+    setup %{posts: posts} do
       TestRepo |> insert_docs!(posts)
       TestRepo.insert! %User{_id: "test-user-id0", username: "bob", email: "bob@gmail.com"}
       :ok
@@ -104,41 +42,36 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert pf.user.email == "john@gmail.com"
     end
 
-    test "get as map" do
-      {:ok, u} = Fetchers.get(TestRepo, User, "test-user-id0", as_map: true)
-      assert u |> Map.get(:_id) == "test-user-id0"
-      assert not is_nil(u |> Map.get(:_rev))
-      assert u |> Map.get(:username) == "bob"
-      assert u |> Map.get(:email) == "bob@gmail.com"
-    end
-
-    test "get as raw map" do
-      {:ok, u} = Fetchers.get(TestRepo, User, "test-user-id0", as_map: :raw)
-      assert u |> Map.get("_id") == "test-user-id0"
-      assert not is_nil(u |> Map.get("_rev"))
-      assert u |> Map.get("username") == "bob"
-      assert u |> Map.get("email") == "bob@gmail.com"
-    end
-
     test "get return nil if not found" do
       {:ok, data} = Fetchers.get(TestRepo, Post, "xpto")
       assert is_nil(data)
     end
 
-    test "fetch one returns struct" do
-      {:ok, u} = Fetchers.fetch_one(TestRepo, User, :all, key: "test-user-id0")
+  end
+
+  describe "fetch_one and fetch_all" do
+
+    setup %{posts: posts} do
+      TestRepo |> create_views!(@schema_design_docs)
+      TestRepo |> insert_docs!(posts)
+      TestRepo.insert! %User{_id: "test-user-id0", username: "bob", email: "bob@gmail.com"}
+      :ok
+    end
+
+    test "fetch one returns Ecto model with include_docs" do
+      {:ok, %User{} = u} = Fetchers.fetch_one(TestRepo, User, :all_no_doc, key: "test-user-id0", include_docs: true)
       assert u._id == "test-user-id0"
       assert not is_nil(u._rev)
       assert u.username == "bob"
       assert u.email == "bob@gmail.com"
     end
 
-    test "fetch one returns struct with include_docs" do
-      {:ok, u} = Fetchers.fetch_one(TestRepo, User, :all_no_doc, key: "test-user-id0", include_docs: true)
-      assert u._id == "test-user-id0"
-      assert not is_nil(u._rev)
-      assert u.username == "bob"
-      assert u.email == "bob@gmail.com"
+    test "fetch one returns a map" do
+      {:ok, u} = Fetchers.fetch_one(TestRepo, User, :all, key: "test-user-id0")
+      assert u[:__struct__] == nil
+      assert u["_id"] == "test-user-id0"
+      assert u["username"] == "bob"
+      assert u["email"] == "bob@gmail.com"
     end
 
     test "fetch one returns nil if not found" do
@@ -149,51 +82,24 @@ defmodule Couchdb.Ecto.FetchersTest do
       {:ok, :many} = Fetchers.fetch_one(TestRepo, Post, :all)
     end
 
-    test "fetch_one and preload" do
-      pc = TestRepo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
-      {:ok, pf} = Fetchers.fetch_one(TestRepo, Post, :all, key: pc._id, preload: :user)
-      assert pf.title == "lorem"
-      assert pf.body == "lorem ipsum"
-      assert pf.user._id == "test-user-id1"
-      assert pf.user.username == "john"
-      assert pf.user.email == "john@gmail.com"
-    end
-
-    test "fetch_one and preload with as_map" do
-      pc = TestRepo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
-      {:ok, pf} = Fetchers.fetch_one(TestRepo, Post, :all, key: pc._id, preload: :user, as_map: true)
-      assert pf.title == "lorem"
-      assert pf.body == "lorem ipsum"
-      assert pf.user._id == "test-user-id1"
-      assert pf.user.username == "john"
-      assert pf.user.email == "john@gmail.com"
-    end
-
     test "fetch_all limit" do
       TestRepo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
       {:ok, pf} = Fetchers.fetch_all(TestRepo, User, :all, limit: 1)
       assert [_] = pf
-      assert hd(pf)._id == "test-user-id0"
-    end
-
-    test "fetch_all limit with include_docs" do
-      TestRepo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
-      {:ok, pf} = Fetchers.fetch_all(TestRepo, User, :all_no_doc, include_docs: true, limit: 1)
-      assert [_] = pf
-      assert hd(pf)._id == "test-user-id0"
+      assert hd(pf)["_id"] == "test-user-id0"
     end
 
     test "fetch_all descending" do
       TestRepo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
       {:ok, pf} = Fetchers.fetch_all(TestRepo, User, :all, descending: true)
       assert length(pf) == 2
-      assert hd(pf)._id == "test-user-id1"
+      assert hd(pf)["_id"] == "test-user-id1"
     end
 
     test "fetch_one limit and descending" do
       TestRepo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
       {:ok, pf} = Fetchers.fetch_one(TestRepo, User, :all, limit: 1, descending: true)
-      assert pf._id == "test-user-id1"
+      assert pf["_id"] == "test-user-id1"
     end
 
     test "fetch all" do
@@ -206,28 +112,111 @@ defmodule Couchdb.Ecto.FetchersTest do
     test "fetch all by keys" do
       {:ok, list} = Fetchers.fetch_all(TestRepo, Post, :all, keys: ["id1", "id2"])
       assert length(list) == 2
-      assert (list |> Enum.at(0))._id == "id1"
-      assert (list |> Enum.at(1))._id == "id2"
+      assert (list |> Enum.at(0))["_id"] == "id1"
+      assert (list |> Enum.at(1))["_id"] == "id2"
     end
 
-    test "fetch one with custom ddoc" do
-      {:ok, u} = Fetchers.fetch_one(TestRepo, User, {:User, :all}, key: "test-user-id0")
-      assert u._id == "test-user-id0"
-      assert not is_nil(u._rev)
-      assert u.username == "bob"
-      assert u.email == "bob@gmail.com"
-    end
-
-    test "fetch one and all with custom ddoc" do
+    test "fetch one and all with custom ddoc/view" do
       {:ok, list} = Fetchers.fetch_all(TestRepo, Post, {:Post, :all}, keys: ["id1", "id2"])
       assert length(list) == 2
-      assert (list |> Enum.at(0))._id == "id1"
-      assert (list |> Enum.at(1))._id == "id2"
+      assert (list |> Enum.at(0))["_id"] == "id1"
+      assert (list |> Enum.at(1))["_id"] == "id2"
+    end
+
+    test "fetch_all with group_level 0" do
+      {:ok, list} = Fetchers.fetch_all(TestRepo, User, :counts, group_level: 0)
+      assert list == [4]
+    end
+
+    test "fetch_all with return_keys" do
+      {:ok, list} = Fetchers.fetch_all(TestRepo, User, :counts, group_level: 0, return_keys: true)
+      assert list == [{nil, 4}]
     end
 
     test "raise if invalid view name" do
       assert_raise RuntimeError, fn -> Fetchers.fetch_all(TestRepo, Post, :xpto) end
     end
+
+  end
+
+  describe "has_one and has_many" do
+
+    setup(%{posts: posts}) do
+      TestRepo |> insert_docs!(posts |> Enum.map(&(&1 |> Map.put(:user_id, "test-user"))))
+      TestRepo.insert! %User{_id: "test-user", username: "test", email: "test"}
+      :ok
+    end
+
+    test "has_one supports cast_assoc" do
+      pc = TestRepo.insert! User.changeset_user_data(%User{}, %{_id: "u1", username: "foo", email: "goo", user_data: %{_id: "ud1", extra: "bar"}})
+      {:ok, uf} = Fetchers.get(TestRepo, User, "u1")
+      {:ok, udf} = Fetchers.get(TestRepo, UserData, "ud1")
+      assert pc._id == uf._id
+      assert pc.username == uf.username
+      assert pc.email == uf.email
+      assert udf._id == "ud1"
+      assert udf.user_id == pc._id
+      assert udf.extra == "bar"
+    end
+
+  end
+
+  describe "multiple_fetch_all" do
+    setup %{posts: posts} do
+      TestRepo |> create_views!(@schema_design_docs)
+      TestRepo |> insert_docs!(posts)
+      TestRepo.insert! %User{_id: "test-user-id1", type: "User", username: "bob", email: "bob@gmail.com"}
+      TestRepo.insert! %User{_id: "test-user-id2", type: "User", username: "alice", email: "alice@gmail.com"}
+      TestRepo.insert! %User{_id: "test-user-id3", type: "User", username: "bob", email: "bob@gmail.com"}
+      :ok
+    end
+
+    test "multiple_fetch_all" do
+      {:ok, list} = Fetchers.multiple_fetch_all(TestRepo, User, :all, [%{key: "test-user-id1", include_docs: true}, %{key: "test-user-id2"}])
+      a = list |> Enum.at(0) |> Enum.at(0)
+      b = list |> Enum.at(1) |> Enum.at(0)
+      assert a.__struct__ == User
+      assert a._id == "test-user-id1"
+      assert a.username == "bob"
+      assert a.email == "bob@gmail.com"
+      assert b[:__struct__] == nil
+      assert b["_id"] == "test-user-id2"
+      assert b["username"] == "alice"
+      assert b["email"] == "alice@gmail.com"
+    end
+
+    test "multiple_fetch_all with group_level 0" do
+      {:ok, list} = Fetchers.multiple_fetch_all(TestRepo, User, :counts, [%{group_level: 0}])
+      assert list == [[6]]
+    end
+
+    test "multiple_fetch_all with return_keys" do
+      {:ok, list} = Fetchers.multiple_fetch_all(TestRepo, User, :counts, [%{group_level: 0}], return_keys: true)
+      assert list == [[{nil, 6}]]
+    end
+
+  end
+
+  describe "find" do
+
+    setup %{posts: posts} do
+      TestRepo |> insert_docs!(posts)
+      TestRepo.insert! %User{_id: "test-user-id1", type: "User", username: "bob", email: "bob@gmail.com"}
+      TestRepo.insert! %User{_id: "test-user-id2", type: "User", username: "alice", email: "alice@gmail.com"}
+      TestRepo.insert! %User{_id: "test-user-id3", type: "User", username: "bob", email: "bob@gmail.com"}
+      :ok
+    end
+
+    test "find" do
+      {:ok, %{docs: list}} = Fetchers.find(TestRepo, User, selector: %{username: %{"$eq" => "alice"}})
+      assert [%User{} = first | _] = list
+      assert first._id == "test-user-id2"
+      assert first.email == "alice@gmail.com"
+    end
+
+  end
+
+  describe "preload" do
 
     defmodule D do
       use Ecto.Schema
@@ -289,6 +278,14 @@ defmodule Couchdb.Ecto.FetchersTest do
       end
     end
 
+    setup %{posts: posts} do
+      TestRepo |> create_views!(@schema_design_docs)
+      TestRepo.insert! %User{_id: "test-user", username: "test", email: "test"}
+      TestRepo.insert! %User{_id: "test-user-id0", username: "bob", email: "bob@gmail.com"}
+      TestRepo |> insert_docs!(posts |> Enum.map(&(&1 |> Map.put(:user_id, "test-user"))))
+      :ok
+    end
+
     test "normalize_preloads" do
       assert Couchdb.Ecto.ResultProcessor.normalize_preloads(:b) == [b: []]
       assert Couchdb.Ecto.ResultProcessor.normalize_preloads([:b]) == [b: []]
@@ -318,26 +315,15 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert not is_nil(Fetchers.get(TestRepo, A, pc._id, preload: :b))
       assert not is_nil(Fetchers.get(TestRepo, A, pc._id, preload: [b: :c]))
     end
-  end
 
-  describe "has_one support" do
-    setup(%{design_docs: design_docs, posts: posts}) do
-      TestRepo |> create_views!(design_docs)
-      TestRepo |> insert_docs!(posts |> Enum.map(&(&1 |> Map.put(:user_id, "test-user"))))
-      TestRepo.insert! %User{_id: "test-user", username: "test", email: "test"}
-      :ok
-    end
-
-    test "has_one supports cast_assoc" do
-      pc = TestRepo.insert! User.changeset_user_data(%User{}, %{_id: "u1", username: "foo", email: "goo", user_data: %{_id: "ud1", extra: "bar"}})
-      {:ok, uf} = Fetchers.get(TestRepo, User, "u1")
-      {:ok, udf} = Fetchers.get(TestRepo, UserData, "ud1")
-      assert pc._id == uf._id
-      assert pc.username == uf.username
-      assert pc.email == uf.email
-      assert udf._id == "ud1"
-      assert udf.user_id == pc._id
-      assert udf.extra == "bar"
+    test "fetch_one and preload" do
+      pc = TestRepo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
+      {:ok, pf} = Fetchers.fetch_one(TestRepo, Post, :all, key: pc._id, include_docs: true, preload: :user)
+      assert pf.title == "lorem"
+      assert pf.body == "lorem ipsum"
+      assert pf.user._id == "test-user-id1"
+      assert pf.user.username == "john"
+      assert pf.user.email == "john@gmail.com"
     end
 
     test "get and fetch preloading has_one" do
@@ -356,76 +342,13 @@ defmodule Couchdb.Ecto.FetchersTest do
     end
 
     test "get and fetch preloading has_many" do
-      {:ok, pf} = Fetchers.get(TestRepo, User, "test-user", preload: :posts)
+      {:ok, pf} = Fetchers.get(TestRepo, User, "test-user", preload: :posts, include_docs: true)
       assert length(pf.posts) == 3
-    end
-
-  end
-
-  describe "Couchdb.Ecto.TestRepo" do
-    test "get" do
-      TestRepo.get(Post, "foo")
-    end
-  end
-
-  describe "direct http calls" do
-    setup %{design_docs: design_docs, posts: posts} do
-      TestRepo |> create_views!(design_docs)
-      TestRepo |> insert_docs!(posts)
-      TestRepo.insert! %User{_id: "test-user-id1", type: "User", username: "bob", email: "bob@gmail.com"}
-      TestRepo.insert! %User{_id: "test-user-id2", type: "User", username: "alice", email: "alice@gmail.com"}
-      TestRepo.insert! %User{_id: "test-user-id3", type: "User", username: "bob", email: "bob@gmail.com"}
-      :ok
-    end
-
-    test "multiple_fetch_all works for Ecto schema" do
-      {:ok, list} = Fetchers.multiple_fetch_all(TestRepo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}])
-      a = list |> Enum.at(0) |> Enum.at(0)
-      b = list |> Enum.at(1) |> Enum.at(0)
-      assert a.__struct__ == User
-      assert a._id == "test-user-id1"
-      assert a.username == "bob"
-      assert a.email == "bob@gmail.com"
-      assert b.__struct__ == User
-      assert b._id == "test-user-id2"
-      assert b.username == "alice"
-      assert b.email == "alice@gmail.com"
-    end
-
-    test "multiple_fetch_all works for map" do
-      {:ok, list} = Fetchers.multiple_fetch_all(TestRepo, User, :all, [%{key: "test-user-id1"}, %{key: "test-user-id2"}], as_map: true)
-      a = list |> Enum.at(0) |> Enum.at(0)
-      b = list |> Enum.at(1) |> Enum.at(0)
-      assert is_nil(Map.get(a, :__struct__))
-      assert a._id == "test-user-id1"
-      assert a.username == "bob"
-      assert a.email == "bob@gmail.com"
-      assert is_nil(Map.get(b, :__struct__))
-      assert b._id == "test-user-id2"
-      assert b.username == "alice"
-      assert b.email == "alice@gmail.com"
-    end
-
-    test "multiple_fetch_all group_level 0" do
-      {:ok, list} = Fetchers.multiple_fetch_all(TestRepo, User, :counts, [%{group_level: 0}], as_map: true)
-      assert list == [[6]]
-    end
-
-    test "multiple_fetch_all with return_keys" do
-      {:ok, list} = Fetchers.multiple_fetch_all(TestRepo, User, :counts, [%{group_level: 0}], as_map: true, return_keys: true)
-      assert list == [[{nil, 6}]]
-    end
-
-    test "find" do
-      {:ok, %{docs: list}} = Fetchers.find(TestRepo, User, %{selector: %{username: %{"$eq" => "alice"}}})
-      a = list |> hd
-      assert a._id == "test-user-id2"
-      assert a.email == "alice@gmail.com"
     end
 
     test "find with preloads" do
       pc = TestRepo.insert! %Post{title: "chibata", body: "lorem ipsum", user: %User{_id: "test-user-id-john", username: "john", email: "john@gmail.com"}}
-      {:ok, %{docs: list}} = Fetchers.find(TestRepo, Post, %{selector: %{title: %{"$eq" => "chibata"}}}, preload: :user)
+      {:ok, %{docs: list}} = Fetchers.find(TestRepo, Post, selector: %{title: %{"$eq" => "chibata"}}, preload: :user)
       a = list |> hd
       assert a._id == pc._id
       assert a.title == "chibata"
@@ -434,18 +357,12 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert a.user._id == "test-user-id-john"
     end
 
-    test "find with fields_except" do
-      maha = TestRepo.insert! %Post{title: "Mahatma", body: "easter egg", user: %User{_id: "id-mahatma", username: "mahatma", email: "mahatma@gmail.com"}}
-      selector =
-        %{selector:
-          %{title: %{"$eq" => "Mahatma"}},
-          fields_except: ["body"]
-        }
-      {:ok, %{docs: list}} = Fetchers.find(TestRepo, Post, selector, preload: :user)
-      a = list |> hd
-      assert maha.title == a.title
-      assert maha.body == "easter egg"
-      assert a.body == nil
+  end
+
+  describe "Couchdb.Ecto.TestRepo" do
+
+    test "get" do
+      TestRepo.get(Post, "foo")
     end
 
   end

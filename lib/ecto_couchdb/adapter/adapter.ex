@@ -82,11 +82,9 @@ defmodule Couchdb.Ecto do
   def insert(repo, schema_meta, fields, _on_conflict, returning, _options) do
     db = repo |> db_from_repo
     type = ddoc_name(schema_meta)
-    with doc = prepare_for_couch(type, fields, schema_meta.schema),
-         {:ok, doc} <- db |> ICouch.save_doc(doc)
-    do
-      {:ok, doc |> prepare_for_returning(returning)}
-    else
+    doc = prepare_for_couch(type, fields, schema_meta.schema)
+    case db |> ICouch.save_doc(doc) do
+      {:ok, doc} -> {:ok, doc |> prepare_for_returning(returning)}
       {:error, :conflict} ->
         {:invalid, [unique: "#{type}_id_index"]}
       {:error, reason} ->
@@ -128,10 +126,8 @@ defmodule Couchdb.Ecto do
     db = repo |> db_from_repo
     id = filters |> Keyword.get(:_id)
     rev = filters |> Keyword.get(:_rev)
-    with {:ok, _doc} <- db |> ICouch.delete_doc(%{"_id" => id, "_rev" => rev})
-    do
-      {:ok, []}
-    else
+    case db |> ICouch.delete_doc(%{"_id" => id, "_rev" => rev}) do
+      {:ok, _doc} -> {:ok, []}
       {:error, :not_found} ->
         {:ok, []}
       {:error, :conflict} ->
@@ -148,11 +144,9 @@ defmodule Couchdb.Ecto do
   def insert_all(repo, schema_meta, _header, list, _on_conflict, _returning, _options) do
     db = repo |> db_from_repo
     type = ddoc_name(schema_meta)
-    with docs = list |> Enum.map(&(prepare_for_couch(type, &1, schema_meta.schema))),
-         {:ok, docs} <- db |> ICouch.save_docs(docs)
-    do
-      {docs |> length, nil}
-    else
+    docs = list |> Enum.map(&(prepare_for_couch(type, &1, schema_meta.schema)))
+    case db |> ICouch.save_docs(docs) do
+      {:ok, docs} -> {docs |> length, nil}
       {:error, reason} -> raise "Error while inserting all (#{inspect(reason)})"
     end
   end
@@ -165,63 +159,12 @@ defmodule Couchdb.Ecto do
     raise "Unsupported operation by #{__MODULE__}: execute"
   end
 
-  def server_connection_from_repo(repo) do
-    repo.config |> Keyword.get(:couchdb_url) |> ICouch.server_connection
-  end
-
-  def db_from_repo(repo) do
-    server_connection_from_repo(repo) |> ICouch.DB.new(repo.config |> Keyword.get(:database))
-  end
-
-  def view_from_repo(repo, ddoc, view_name, params \\ []) do
-    %ICouch.View{db: db_from_repo(repo), ddoc: ddoc, name: view_name, params: params}
-  end
-
-  # TODO: não deveria ser type from_schema_meta?
-  @spec ddoc_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
-  def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
-  def ddoc_name(module), do: module.__schema__(:source)
-
   defp prepare_for_couch(type, existing_doc \\ ICouch.Document.new, new_fields, schema_meta) do
     {attachments, regular_fields} = split_attachments(existing_doc, new_fields, schema_meta)
     attachments = prepare_attachments(attachments)
     [{:type, type}, {:_attachments, attachments} | regular_fields] |> Enum.reduce(existing_doc, fn {k, v}, doc ->
       doc |> ICouch.Document.put(k |> Atom.to_string, v)
     end)
-  end
-
-  defp split_attachments(fetched_doc, all_fields, schema) do
-    # split attachment and fields
-    {new_attachments, new_fields} = all_fields |> Enum.split_with(fn {k, _} ->
-      schema.__schema__(:type, k) == Couchdb.Ecto.Attachment
-    end)
-    # merge existing attachments and new ones
-    old_attachments = fetched_doc["_attachments"] || %{}
-    new_attachments_names = new_attachments |> Enum.map(fn {k, _} -> k |> to_string end)
-    all_attachments =
-      old_attachments
-      |> Map.drop(new_attachments_names)
-      |> Map.merge(Enum.into(new_attachments, %{}))
-    # return
-    {all_attachments, new_fields}
-  end
-  defp prepare_attachments(attachments) do
-    attachments |> Enum.reduce(%{}, fn
-      {_, nil}, acc -> acc
-      {k, v}, acc -> Map.put(acc, k |> to_string, prepare_attachment(v))
-    end)
-  end
-  defp prepare_attachment(%{"content_type" => content_type, "stub" => true}) do
-    do_prepare_attachment(content_type, nil)
-  end
-  defp prepare_attachment(%{content_type: content_type, data: data}) do
-    do_prepare_attachment(content_type, data)
-  end
-  defp do_prepare_attachment(content_type, nil) do
-    %{"content_type" => content_type, "stub" => true}
-  end
-  defp do_prepare_attachment(content_type, data) do
-    %{"content_type" => content_type, "data" => data}
   end
 
   defp prepare_for_returning(%ICouch.Document{} = doc, returning) do
@@ -239,6 +182,61 @@ defmodule Couchdb.Ecto do
       {:error, :stale}
     end
   end
+
+  defp split_attachments(fetched_doc, all_fields, schema) do
+    # split attachment and fields
+    {new_attachments, new_fields} = all_fields |> Enum.split_with(fn {k, _} ->
+      schema.__schema__(:type, k) == Couchdb.Ecto.Attachment
+    end)
+    # merge existing attachments and new ones
+    old_attachments = fetched_doc["_attachments"] || %{}
+    new_attachments_names = new_attachments |> Enum.map(fn {k, _} -> k |> to_string end)
+    all_attachments =
+      old_attachments
+      |> Map.drop(new_attachments_names)
+      |> Map.merge(Enum.into(new_attachments, %{}))
+    # return
+    {all_attachments, new_fields}
+  end
+
+  defp prepare_attachments(attachments) do
+    attachments |> Enum.reduce(%{}, fn
+      {_, nil}, acc -> acc
+      {k, v}, acc -> Map.put(acc, k |> to_string, prepare_attachment(v))
+    end)
+  end
+  # TODO: usar ICouch
+  defp prepare_attachment(%{"content_type" => content_type, "stub" => true}) do
+    do_prepare_attachment(content_type, nil)
+  end
+  defp prepare_attachment(%{content_type: content_type, data: data}) do
+    do_prepare_attachment(content_type, data)
+  end
+  defp do_prepare_attachment(content_type, nil) do
+    %{"content_type" => content_type, "stub" => true}
+  end
+  defp do_prepare_attachment(content_type, data) do
+    %{"content_type" => content_type, "data" => data}
+  end
+
+  #
+
+  def server_connection_from_repo(repo) do
+    repo.config |> Keyword.get(:couchdb_url) |> ICouch.server_connection
+  end
+
+  def db_from_repo(repo) do
+    server_connection_from_repo(repo) |> ICouch.DB.new(repo.config |> Keyword.get(:database))
+  end
+
+  def view_from_repo(repo, ddoc, view_name, params \\ []) do
+    %ICouch.View{db: db_from_repo(repo), ddoc: ddoc, name: view_name, params: params}
+  end
+
+  # TODO: não deveria ser type from_schema_meta?
+  @spec ddoc_name(Ecto.Adapter.schema_meta | Ecto.Adapter.query_meta) :: String.t
+  def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
+  def ddoc_name(module), do: module.__schema__(:source)
 
   ##
   # Storage behaviour

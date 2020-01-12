@@ -1,7 +1,7 @@
 ExUnit.start()
 
 Application.put_env(
-	:ecto_couchdb,
+  :ecto_couchdb,
   TestRepo, [
     adapter: Couchdb.Ecto,
     couchdb_url: "http://admin:admin@127.0.0.1:5984",

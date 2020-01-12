@@ -36,10 +36,8 @@ defmodule Couchdb.Ecto.Attachment do
     %__MODULE__{content_type: content_type, data: data, revpos: revpos} |> do_load
   end
   defp do_load(%__MODULE__{content_type: "application/json", data: data} = attachment) when not is_nil(data) do
-    with {:ok, json} <- Poison.decode(data)
-    do
-      {:ok, Map.put(attachment, :data, json)}
-    else
+    case Poison.decode(data) do
+      {:ok, json} -> {:ok, Map.put(attachment, :data, json)}
       _error -> :error
     end
   end

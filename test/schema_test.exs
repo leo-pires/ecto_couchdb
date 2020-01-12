@@ -1,5 +1,5 @@
 defmodule Couchdb.Ecto.SchemaTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   import TestSupport
 
   @ddoc_doc_id "TestPost"
