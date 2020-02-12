@@ -20,5 +20,4 @@ erl_crash.dump
 *.ez
 
 .DS_Store
-
-test/priv/repo/migrations/*.exs
+.elixir_ls
