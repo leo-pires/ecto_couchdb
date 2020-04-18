@@ -1,11 +1,17 @@
 defmodule Couchdb.Ecto.FetchersTest do
-  use Couchdb.Ecto.TestModelCase, async: false
+  use Couchdb.Ecto.ModelCase, async: false
   alias Couchdb.Ecto.Fetchers
 
+
+  setup do
+    clear_db!()
+    :ok
+  end
 
   describe "get" do
 
     setup do
+      clear_db!()
       insert_docs!(@posts)
       TestRepo.insert! %User{_id: "test-user-id0", username: "bob", email: "bob@gmail.com"}
       :ok
@@ -21,7 +27,7 @@ defmodule Couchdb.Ecto.FetchersTest do
 
     test "get by key and preload" do
       pc = TestRepo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
-      {:ok, pf} = Fetchers.get(TestRepo, Post, pc._id, preload: :user)
+      {:ok, pf} = Fetchers.get(TestRepo, Post, pc._id, [], [preload: :user])
       assert pf.title == "lorem"
       assert pf.body == "lorem ipsum"
       assert pf.user._id == "test-user-id1"
@@ -65,8 +71,8 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert {:ok, nil} = Fetchers.one(TestRepo, User, :all, key: "xpto")
     end
 
-    test "fetch one return :many if more than one found" do
-      {:ok, :many} = Fetchers.one(TestRepo, Post, :all)
+    test "fetch one return error if more than one found" do
+      {:error, :too_many_results} = Fetchers.one(TestRepo, Post, :all)
     end
 
     test "fetch_all limit" do
@@ -116,16 +122,16 @@ defmodule Couchdb.Ecto.FetchersTest do
     end
 
     test "fetch_all with return_keys" do
-      {:ok, list} = Fetchers.all(TestRepo, Post, :all, return_keys: true)
+      {:ok, list} = Fetchers.all(TestRepo, Post, :all, [], [return_keys: true])
       assert [{"id1", %{"_id" => "id1"}}, {"id2", %{"_id" => "id2"}}, {"id3", %{"_id" => "id3"}}] = list
-      {:ok, list} = Fetchers.all(TestRepo, Post, :all, include_docs: true, return_keys: true)
+      {:ok, list} = Fetchers.all(TestRepo, Post, :all, [include_docs: true], [return_keys: true])
       assert [{"id1", %Post{_id: "id1"}}, {"id2", %Post{_id: "id2"}}, {"id3", %Post{_id: "id3"}}] = list
-      {:ok, list} = Fetchers.all(TestRepo, User, :counts, group_level: 0, return_keys: true)
+      {:ok, list} = Fetchers.all(TestRepo, User, :counts, [group_level: 0], [return_keys: true])
       assert list == [{nil, 4}]
     end
 
-    test "raise if invalid view name" do
-      assert_raise RuntimeError, fn -> Fetchers.all(TestRepo, Post, :xpto) end
+    test "returns error if invalid view name" do
+      assert {:error, :not_found} = Fetchers.all(TestRepo, Post, :xpto)
     end
 
   end
@@ -290,11 +296,11 @@ defmodule Couchdb.Ecto.FetchersTest do
 
     test "get preload" do
       pc = TestRepo.insert! A.changeset(%A{}, %{title: "a", b: %{title: "b", c: %{title: "c", d: %{title: "d"}}}})
-      {:ok, a1} = Fetchers.get(TestRepo, A, pc._id, preload: [b: :c])
+      {:ok, a1} = Fetchers.get(TestRepo, A, pc._id, [], [preload: [b: :c]])
       assert a1.title == "a"
       assert a1.b.title == "b"
       assert a1.b.c.title == "c"
-      {:ok, a2} = Fetchers.get(TestRepo, A, pc._id, preload: [b: [c: :d]])
+      {:ok, a2} = Fetchers.get(TestRepo, A, pc._id, [], [preload: [b: [c: :d]]])
       assert a2.title == "a"
       assert a2.b.title == "b"
       assert a2.b.c.title == "c"
@@ -303,13 +309,13 @@ defmodule Couchdb.Ecto.FetchersTest do
 
     test "get preload missing association" do
       pc = TestRepo.insert! A.changeset(%A{}, %{title: "a"})
-      assert not is_nil(Fetchers.get(TestRepo, A, pc._id, preload: :b))
-      assert not is_nil(Fetchers.get(TestRepo, A, pc._id, preload: [b: :c]))
+      assert not is_nil(Fetchers.get(TestRepo, A, pc._id, [], [preload: :b]))
+      assert not is_nil(Fetchers.get(TestRepo, A, pc._id, [], [preload: [b: :c]]))
     end
 
     test "fetch_one and preload" do
       pc = TestRepo.insert! %Post{title: "lorem", body: "lorem ipsum", user: %User{_id: "test-user-id1", username: "john", email: "john@gmail.com"}}
-      {:ok, pf} = Fetchers.one(TestRepo, Post, :all, key: pc._id, include_docs: true, preload: :user)
+      {:ok, pf} = Fetchers.one(TestRepo, Post, :all, [key: pc._id, include_docs: true], [preload: :user])
       assert pf.title == "lorem"
       assert pf.body == "lorem ipsum"
       assert pf.user._id == "test-user-id1"
@@ -320,7 +326,7 @@ defmodule Couchdb.Ecto.FetchersTest do
     test "get and fetch preloading has_one" do
       pc = TestRepo.insert! User.changeset_user_data(%User{}, %{_id: "u1", username: "foo", email: "goo", user_data: %{_id: "ud1", extra: "bar"}})
       {:ok, udf} = Fetchers.get(TestRepo, UserData, "ud1")
-      {:ok, uf} = Fetchers.get(TestRepo, User, "u1", preload: :user_data)
+      {:ok, uf} = Fetchers.get(TestRepo, User, "u1", [], [preload: :user_data])
       assert pc._id == uf._id
       assert pc.username == uf.username
       assert pc.email == uf.email
@@ -333,13 +339,13 @@ defmodule Couchdb.Ecto.FetchersTest do
     end
 
     test "get and fetch preloading has_many" do
-      {:ok, pf} = Fetchers.get(TestRepo, User, "test-user", preload: :posts, include_docs: true)
+      {:ok, pf} = Fetchers.get(TestRepo, User, "test-user", [include_docs: true], [preload: :posts])
       assert length(pf.posts) == 3
     end
 
     test "find with preloads" do
       pc = TestRepo.insert! %Post{title: "chibata", body: "lorem ipsum", user: %User{_id: "test-user-id-john", username: "john", email: "john@gmail.com"}}
-      {:ok, %{docs: list}} = Fetchers.find(TestRepo, Post, selector: %{title: %{"$eq" => "chibata"}}, preload: :user)
+      {:ok, %{docs: list}} = Fetchers.find(TestRepo, Post, [selector: %{title: %{"$eq" => "chibata"}}], [preload: :user])
       a = list |> hd
       assert a._id == pc._id
       assert a.title == "chibata"

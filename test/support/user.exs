@@ -13,15 +13,17 @@ defmodule User do
     has_many :posts, {"by_user_id", Post}, references: :_id
     has_one :user_data, {"by_user_id", UserData}, references: :_id, foreign_key: :user_id
     timestamps()
-
-    def changeset(struct, params) do
-      struct
-      |> Ecto.Changeset.cast(params, [:_id, :username, :email])
-    end
-    def changeset_user_data(struct, params) do
-      struct
-      |> Ecto.Changeset.cast(params, [:_id, :username, :email])
-      |> Ecto.Changeset.cast_assoc(:user_data)
-    end
   end
+
+  def changeset(struct, params) do
+    struct
+    |> Ecto.Changeset.cast(params, [:_id, :username, :email])
+  end
+
+  def changeset_user_data(struct, params) do
+    struct
+    |> Ecto.Changeset.cast(params, [:_id, :username, :email])
+    |> Ecto.Changeset.cast_assoc(:user_data)
+  end
+
 end

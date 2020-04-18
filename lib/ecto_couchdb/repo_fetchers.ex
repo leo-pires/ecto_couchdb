@@ -1,3 +1,4 @@
+# TODO: typespec it
 defmodule Couchdb.Ecto.RepoFetchers do
 
   defmacro __using__(_opts) do
@@ -12,7 +13,7 @@ defmodule Couchdb.Ecto.RepoFetchers do
 
       def get!(schema, id, opts \\ []) do
         case Couchdb.Ecto.Fetchers.get(__MODULE__, schema, id, opts) do
-          {:ok, nil} -> raise "not found"
+          {:ok, nil} -> raise Ecto.NoResultsError
           {:ok, data} -> data
           error -> error
         end
@@ -20,7 +21,7 @@ defmodule Couchdb.Ecto.RepoFetchers do
 
       def one(schema, view_name, opts \\ []) do
         case Couchdb.Ecto.Fetchers.one(__MODULE__, schema, view_name, opts) do
-          {:ok, :many} -> raise "too many found"
+          {:ok, :too_many_results} -> raise "too many found"
           {:ok, data} -> data
           error -> error
         end
@@ -28,8 +29,8 @@ defmodule Couchdb.Ecto.RepoFetchers do
 
       def one!(schema, view_name, opts \\ []) do
         case Couchdb.Ecto.Fetchers.one(__MODULE__, schema, view_name, opts) do
-          {:ok, nil} -> raise "not found"
-          {:ok, :many} -> raise "too many found"
+          {:ok, nil} -> raise Ecto.NoResultsError
+          {:ok, :too_many_results} -> raise "too many found"
           {:ok, data} -> data
           error -> error
         end

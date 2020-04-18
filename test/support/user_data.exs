@@ -10,10 +10,11 @@ defmodule UserData do
     field :extra, :string
     belongs_to :user, User, references: :_id
     timestamps()
-
-    def changeset(struct, params) do
-      struct
-      |> Ecto.Changeset.cast(params, [:_id, :extra])
-    end
   end
+
+  def changeset(struct, params) do
+    struct
+    |> Ecto.Changeset.cast(params, [:_id, :extra])
+  end
+
 end

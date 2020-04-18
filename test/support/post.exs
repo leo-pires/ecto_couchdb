@@ -13,15 +13,17 @@ defmodule Post do
     embeds_many :grants, Grant, on_replace: :delete
     embeds_one :stats, Stats, on_replace: :delete
     timestamps()
-
-    def changeset(struct, params) do
-      struct
-      |> Ecto.Changeset.cast(params, [:title, :body, :user_id])
-    end
-    def changeset_user(struct, params) do
-      struct
-      |> Ecto.Changeset.cast(params, [:title, :body])
-      |> Ecto.Changeset.cast_assoc(:user)
-    end
   end
+
+  def changeset(struct, params) do
+    struct
+    |> Ecto.Changeset.cast(params, [:title, :body, :user_id])
+  end
+
+  def changeset_user(struct, params) do
+    struct
+    |> Ecto.Changeset.cast(params, [:title, :body])
+    |> Ecto.Changeset.cast_assoc(:user)
+  end
+
 end

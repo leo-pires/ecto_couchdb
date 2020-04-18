@@ -1,8 +1,13 @@
 defmodule Couchdb.Ecto.RepoTest do
-  use Couchdb.Ecto.TestModelCase, async: false
+  use Couchdb.Ecto.ModelCase, async: false
   alias Couchdb.Ecto.Fetchers
   alias Couchdb.Ecto.Attachment
 
+
+  setup do
+    clear_db!()
+    :ok
+  end
 
   describe "insert" do
 
@@ -686,7 +691,7 @@ defmodule Couchdb.Ecto.RepoTest do
       assert length(list_post) == 4
       {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert length(list_user) == 2
-      {:ok, pf1} = Fetchers.get(TestRepo, Post, pc._id, preload: :user)
+      {:ok, pf1} = Fetchers.get(TestRepo, Post, pc._id, [], [preload: :user])
       assert not is_nil(pf1)
       assert pf1.user_id == pc.user._id
       assert pf1.user_id == pf1.user._id
@@ -701,7 +706,7 @@ defmodule Couchdb.Ecto.RepoTest do
       assert length(list_post) == 4
       {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
       assert length(list_user) == 2
-      {:ok, pf2} = Fetchers.get(TestRepo, Post, pc._id, preload: :user)
+      {:ok, pf2} = Fetchers.get(TestRepo, Post, pc._id, [], [preload: :user])
       assert pf2.user_id == pc.user._id
       assert pf2.user_id == pf1.user._id
       assert pf2._rev != pf1._rev

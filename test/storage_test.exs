@@ -1,6 +1,11 @@
 defmodule Couchdb.Ecto.StorageTest do
-  use Couchdb.Ecto.TestModelCase, async: false
+  use Couchdb.Ecto.ModelCase, async: false
 
+
+  setup do
+    clear_db!()
+    :ok
+  end
 
   describe "storage" do
 

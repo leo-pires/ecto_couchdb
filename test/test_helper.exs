@@ -1,15 +1,15 @@
 Application.put_env(
   :ecto_couchdb,
+  :ecto_repos, [TestRepo]
+)
+Application.put_env(
+  :ecto_couchdb,
   TestRepo, [
     adapter: Couchdb.Ecto,
     couchdb_url: "http://admin:admin@127.0.0.1:5984",
     database: "ecto_couchdb_test",
     priv: "test/priv/repo"
   ]
-)
-Application.put_env(
-  :ecto_couchdb,
-  :ecto_repos, [TestRepo]
 )
 
 defmodule TestRepo do
