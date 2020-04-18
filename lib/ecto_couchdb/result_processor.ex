@@ -25,6 +25,9 @@ defmodule Couchdb.Ecto.ResultProcessor do
   def process(:find, %{docs: docs, bookmark: bookmark} = result, payload) do
     %{docs: process_docs(docs, payload), bookmark: bookmark, warning: Map.get(result, :warning)}
   end
+  def process(:search, %{docs: docs, bookmark: bookmark, total_rows: total_rows}, payload) do
+    %{docs: process_docs(docs, payload), bookmark: bookmark, total_rows: total_rows}
+  end
 
   ###
 
