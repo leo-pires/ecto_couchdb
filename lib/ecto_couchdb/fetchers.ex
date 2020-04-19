@@ -31,7 +31,7 @@ defmodule Couchdb.Ecto.Fetchers do
   @spec all(Ecto.Repo.t, Ecto.Schema.t, ddoc_view, fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()}
   def all(repo, schema, ddoc_view, fetch_opts \\ [], processor_opts \\ []) do
     {ddoc, view_name} = split_ddoc_view(schema, ddoc_view)
-    case repo |> view_from_repo(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
+    case repo |> db_from_repo |> view_from_db(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
       {:ok, view} -> {:ok, ResultProcessor.process_result(:all, view, repo, schema, processor_opts)}
       {:error, reason} -> {:error, reason}
     end

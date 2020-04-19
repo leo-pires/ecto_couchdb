@@ -19,7 +19,9 @@ defmodule Couchdb.Ecto do
   @impl true
   def init(config) do
     child_spec = Supervisor.Spec.supervisor(Supervisor, [[], [strategy: :one_for_one]])
-    adapter_meta = %{server: server_from_config(config), db: db_from_config(config)}
+    server = server_from_config(config)
+    db = server |> db_from_config(config)
+    adapter_meta = %{server: server, db: db}
     {:ok, child_spec, adapter_meta}
   end
 
@@ -209,8 +211,8 @@ defmodule Couchdb.Ecto do
   ##
 
   @impl true
-  def storage_status(options) do
-    case options |> db_from_config |> ICouch.db_info do
+  def storage_status(config) do
+    case config |> server_from_config |> db_from_config(config) |> ICouch.db_info do
       {:ok, _info} -> :up
       {:error, :not_found} -> :down
       {:error, reason} -> {:error, reason}
@@ -218,9 +220,9 @@ defmodule Couchdb.Ecto do
   end
 
   @impl true
-  def storage_up(options) do
-    database_name = options |> Keyword.get(:database)
-    case options |> server_from_config |> ICouch.create_db(database_name) do
+  def storage_up(config) do
+    database_name = config |> Keyword.get(:database)
+    case config |> server_from_config |> ICouch.create_db(database_name) do
       {:ok, _db} -> :ok
       {:error, :precondition_failed} -> {:error, :already_up}
       {:error, reason} -> {:error, reason}
@@ -228,8 +230,8 @@ defmodule Couchdb.Ecto do
   end
 
   @impl true
-  def storage_down(options) do
-    case options |> db_from_config |> ICouch.delete_db do
+  def storage_down(config) do
+    case config |> server_from_config |> db_from_config(config) |> ICouch.delete_db do
       :ok -> :ok
       {:error, :not_found} -> {:error, :already_down}
       {:error, reason} -> {:error, reason}

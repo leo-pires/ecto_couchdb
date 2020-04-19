@@ -6,20 +6,26 @@ defmodule Couchdb.Ecto.ModelCase do
 
       import ExUnit.Assertions
       import Couchdb.Ecto.Helpers
+
       @repo TestRepo
 
 
-      def clear_db! do
-        server = @repo.config |> server_from_config
-        database_name = @repo.config |> Keyword.get(:database)
-        case server |> ICouch.delete_db(database_name) do
+      def clear_db!(stack_size \\ 0) do
+        if stack_size > 3 do
+          raise "Could not clear db!"
+        end
+        server = @repo |> server_from_repo
+        db = @repo |> db_from_repo
+        db_name = db.name
+        # IO.inspect(server)
+        case server |> ICouch.delete_db(db_name) do
           {:error, :not_found} -> :ok
           :ok -> :ok
-          _error -> clear_db!()
+          _error -> clear_db!(stack_size + 1)
         end
-        case server |> ICouch.create_db(database_name) do
+        case server |> ICouch.create_db(db_name) do
           {:ok, _db} -> :ok
-          _error -> clear_db!()
+          _error -> clear_db!(stack_size + 1)
         end
         :ok
       end
@@ -139,7 +145,11 @@ defmodule Couchdb.Ecto.ModelCase do
   end
 
   setup do
-    %{repo: TestRepo, db: TestRepo |> Couchdb.Ecto.Helpers.db_from_repo}
+    %{
+      repo: TestRepo,
+      server: TestRepo |> Couchdb.Ecto.Helpers.server_from_repo,
+      db: TestRepo |> Couchdb.Ecto.Helpers.db_from_repo
+    }
   end
 
 end
