@@ -7,17 +7,23 @@ defmodule Couchdb.Ecto.Helpers do
     config |> server_from_config |> ICouch.DB.new(config |> Keyword.get(:database))
   end
   def view_from_config(config, ddoc, view_name, params \\ []) do
-    %ICouch.View{db: db_from_config(config), ddoc: ddoc, name: view_name, params: params}
+    config |> db_from_config |> view_from_db(ddoc, view_name, params)
   end
 
   def server_from_repo(repo) do
-    server_from_config(repo.config)
+    {_repo, %{server: server}} = Ecto.Repo.Registry.lookup(repo)
+    server
   end
   def db_from_repo(repo) do
-    db_from_config(repo.config)
+    {_repo, %{db: db}} = Ecto.Repo.Registry.lookup(repo)
+    db
   end
   def view_from_repo(repo, ddoc, view_name, params \\ []) do
-    view_from_config(repo.config, ddoc, view_name, params)
+    repo |> db_from_repo |> view_from_db(ddoc, view_name, params)
+  end
+
+  def view_from_db(db, ddoc, view_name, params \\ []) do
+    %ICouch.View{db: db, ddoc: ddoc, name: view_name, params: params}
   end
 
   @spec ddoc_name(Ecto.Schema.schema()) :: String.t
