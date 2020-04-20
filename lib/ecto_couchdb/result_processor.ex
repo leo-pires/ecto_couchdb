@@ -1,37 +1,51 @@
+# TODO: typespec
 defmodule Couchdb.Ecto.ResultProcessor do
 
   alias Couchdb.Ecto.Fetchers
 
-  def process_result(result_type, result, repo, schema, opts) do
+  def process_result(result_type, result, repo, schema_map, opts) do
     payload = %{
-      repo: repo, schema: schema,
+      repo: repo, schema_map: schema_map,
       preloads: opts |> Keyword.get(:preload, []) |> normalize_preloads,
       return_keys: opts |> Keyword.get(:return_keys, false)
     }
     process(result_type, result, payload)
   end
 
+  def check_schema_map(map, schema_map_fun) when is_function(schema_map_fun) do
+    case schema_map_fun.(map) do
+      nil -> raise "Invalid schema mapping"
+      schema -> schema
+    end
+  end
+  def check_schema_map(_map, schema) do
+    schema
+  end
+
+  def normalize_preloads(f) when is_atom(f), do: [strict_normalize_preloads(f)]
+  def normalize_preloads(o), do: strict_normalize_preloads(o)
+
   ###
 
-  def process(:get, doc, payload) do
+  defp process(:get, doc, payload) do
     doc |> process_doc(payload)
   end
-  def process(:all, %ICouch.View{} = view, payload) do
+  defp process(:all, %ICouch.View{} = view, payload) do
     process_rows(view.rows, payload)
   end
-  def process(:multiple_all, %{results: results}, payload) do
+  defp process(:multiple_all, %{results: results}, payload) do
     results |> Enum.map(&(process_rows(&1.rows, payload)))
   end
-  def process(:find, %{docs: docs, bookmark: bookmark} = result, payload) do
+  defp process(:find, %{docs: docs, bookmark: bookmark} = result, payload) do
     %{docs: process_docs(docs, payload), bookmark: bookmark, warning: Map.get(result, :warning)}
   end
-  def process(:search, %{docs: docs, bookmark: bookmark, total_rows: total_rows}, payload) do
+  defp process(:search, %{docs: docs, bookmark: bookmark, total_rows: total_rows}, payload) do
     %{docs: process_docs(docs, payload), bookmark: bookmark, total_rows: total_rows}
   end
 
   ###
 
-  def process_rows(rows, payload) when is_list(rows), do: rows |> Enum.map(&(process_row(&1, payload)))
+  defp process_rows(rows, payload) when is_list(rows), do: rows |> Enum.map(&(process_row(&1, payload)))
 
   defp process_row(%{"key" => key, "doc" => doc}, payload) do
     row_result(key, doc |> process_doc(payload), payload)
@@ -42,9 +56,9 @@ defmodule Couchdb.Ecto.ResultProcessor do
   defp row_result(key, returning, %{return_keys: true}), do: {key, returning}
   defp row_result(_key, returning, %{return_keys: false}), do: returning
 
-  def process_docs(docs, payload) when is_list(docs), do: docs |> Enum.map(&(process_doc(&1, payload)))
+  defp process_docs(docs, payload) when is_list(docs), do: docs |> Enum.map(&(process_doc(&1, payload)))
 
-  def process_doc(%ICouch.Document{} = doc, payload) do
+  defp process_doc(%ICouch.Document{} = doc, payload) do
     regular_fields = doc.fields |> Map.keys |> Enum.reduce([], fn
       "_attachments", acc ->
         acc
@@ -58,7 +72,7 @@ defmodule Couchdb.Ecto.ResultProcessor do
     end)
     (regular_fields ++ attachments_fields) |> Map.new |> postprocess_doc(payload)
   end
-  def process_doc(value, _payload) do
+  defp process_doc(value, _payload) do
     value
   end
   defp field_name(field_str), do: field_str |> String.to_atom
@@ -76,21 +90,25 @@ defmodule Couchdb.Ecto.ResultProcessor do
     end
   end
 
-  defp postprocess_doc(map, payload), do: map |> postprocess_load(payload) |> inject_preloads(payload)
+  defp postprocess_doc(map, %{schema_map: schema_map} = payload) do
+    map |> postprocess_load(schema_map) |> inject_preloads(payload)
+  end
 
-  defp postprocess_load(map, %{schema: schema}), do: Ecto.Repo.Schema.load(Couchdb.Ecto, schema, map)
+  defp postprocess_load(map, schema_map) do
+    schema = check_schema_map(map, schema_map)
+    Ecto.Repo.Schema.load(Couchdb.Ecto, schema, map)
+  end
 
   ###
 
-  def normalize_preloads(f) when is_atom(f), do: [strict_normalize_preloads(f)]
-  def normalize_preloads(o), do: strict_normalize_preloads(o)
   defp strict_normalize_preloads(f) when is_atom(f), do: {f, []}
   defp strict_normalize_preloads({f, l}), do: {f, normalize_preloads(l)}
   defp strict_normalize_preloads(l) when is_list(l), do: l |> Enum.map(&(strict_normalize_preloads(&1)))
 
   defp inject_preloads(nil, _), do: nil
   defp inject_preloads(map, %{preloads: []}), do: map
-  defp inject_preloads(map, %{repo: repo, schema: schema, preloads: preloads}) do
+  defp inject_preloads(map, %{repo: repo, schema_map: schema_map, preloads: preloads}) do
+    schema = check_schema_map(map, schema_map)
     to_inject = preloads |> Enum.reduce([], fn ({preload_assoc, preload_inject}, acc) ->
       association = schema.__schema__(:association, preload_assoc)
       case map |> Map.get(association.owner_key) |> inject_preload(repo, preload_inject, association) do
@@ -102,24 +120,30 @@ defmodule Couchdb.Ecto.ResultProcessor do
     Map.merge(map, to_inject)
   end
 
-  defp inject_preload(nil, _, _, _), do: nil
+  defp inject_preload(nil, _repo, _preload, _association), do: nil
   defp inject_preload(value, repo, preload, %Ecto.Association.BelongsTo{related: related_schema}) do
     {:ok, fetched} = Fetchers.get(repo, related_schema, value)
-    fetched |> inject_preloads(%{repo: repo, schema: related_schema, preloads: preload})
+    fetched |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})
   end
   defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :one, queryable: queryable}) do
     {view_name, related_schema} = related_view(queryable)
     {:ok, fetched} = Fetchers.one(repo, related_schema, view_name, key: value, include_docs: true)
-    fetched |> inject_preloads(%{repo: repo, schema: related_schema, preloads: preload})
+    fetched |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})
   end
   defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :many, queryable: queryable}) do
     {view_name, related_schema} = related_view(queryable)
     {:ok, fetched} = Fetchers.all(repo, related_schema, view_name, key: value, include_docs: true)
-    fetched |> Enum.map(&(&1 |> inject_preloads(%{repo: repo, schema: related_schema, preloads: preload})))
+    fetched |> Enum.map(&(&1 |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})))
   end
-  defp inject_preload(_, _, _, association), do: raise "Unsupported preload type #{inspect association}"
+  defp inject_preload(_, _, _, association) do
+    raise "Unsupported preload type #{inspect association}"
+  end
 
-  defp related_view({view_name_str, related_schema}), do: {view_name_str |> String.to_atom, related_schema}
-  defp related_view(queryable), do: "Invalid queryable (#{inspect queryable}), should be (\"view_name\", schema)"
+  defp related_view({view_name_str, related_schema}) do
+    {view_name_str |> String.to_atom, related_schema}
+  end
+  defp related_view(queryable) do
+    raise "Invalid queryable (#{inspect queryable})"
+  end
 
 end

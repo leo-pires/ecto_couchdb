@@ -2,6 +2,7 @@ defmodule Couchdb.Ecto.Fetchers do
   import Couchdb.Ecto.Helpers
   alias Couchdb.Ecto.ResultProcessor
 
+  @type schema_map_fun :: Ecto.Schema.t | (ICouch.Document.t -> Ecto.Schema.t)
   @type ddoc_view :: {String.t, String.t} | String.t
   @type fetch_options :: term()
   @type preload_options :: atom() | [atom()] | [preload: preload_options]
@@ -9,18 +10,18 @@ defmodule Couchdb.Ecto.Fetchers do
   @type processor_options :: [preload: preload_options, return_keys: boolean()]
 
 
-  @spec get(Ecto.Repo.t, Ecto.Schema.t, String.t, fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()}
-  def get(repo, schema, id, fetch_opts \\ [], processor_opts \\ []) do
-    case repo |> db_from_repo |> ICouch.open_doc(id, fetch_opts) do
-      {:ok, doc} -> {:ok, ResultProcessor.process_result(:get, doc, repo, schema, processor_opts)}
+  @spec get(Ecto.Repo.t, schema_map_fun, String.t, fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()}
+  def get(repo, schema_map, doc_id, fetch_opts \\ [], processor_opts \\ []) do
+    case repo |> db_from_repo |> ICouch.open_doc(doc_id, fetch_opts) do
+      {:ok, doc} -> {:ok, ResultProcessor.process_result(:get, doc, repo, schema_map, processor_opts)}
       {:error, :not_found} -> {:ok, nil}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @spec one(Ecto.Repo.t, Ecto.Schema.t, ddoc_view, fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, term()}
-  def one(repo, schema, ddoc_view, fetch_opts \\ [], processor_opts \\ []) do
-    case all(repo, schema, ddoc_view, fetch_opts, processor_opts) do
+  @spec one(Ecto.Repo.t, schema_map_fun, ddoc_view, fetch_options) :: {:ok, Ecto.Schema.t() | nil} | {:error, :too_many_results | term()}
+  def one(repo, schema_map, ddoc_view, fetch_opts \\ [], processor_opts \\ []) do
+    case all(repo, schema_map, ddoc_view, fetch_opts, processor_opts) do
       {:ok, []} -> {:ok, nil}
       {:ok, [data]} -> {:ok, data}
       {:ok, _} -> {:error, :too_many_results}
@@ -28,25 +29,25 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec all(Ecto.Repo.t, Ecto.Schema.t, ddoc_view, fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()}
-  def all(repo, schema, ddoc_view, fetch_opts \\ [], processor_opts \\ []) do
-    {ddoc, view_name} = split_ddoc_view(schema, ddoc_view)
+  @spec all(Ecto.Repo.t, schema_map_fun, ddoc_view, fetch_options) :: {:ok, [Ecto.Schema.t()]} | {:error, term()}
+  def all(repo, schema_map, ddoc_view, fetch_opts \\ [], processor_opts \\ []) do
+    {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
     case repo |> db_from_repo |> view_from_db(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
-      {:ok, view} -> {:ok, ResultProcessor.process_result(:all, view, repo, schema, processor_opts)}
+      {:ok, view} -> {:ok, ResultProcessor.process_result(:all, view, repo, schema_map, processor_opts)}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  # TODO: fix typespec
-  @spec multiple_all(Ecto.Repo.t, Ecto.Schema.t, list(fetch_options), processor_options) :: term()
-  def multiple_all(repo, schema, ddoc_view, queries, processor_opts \\ []) do
-    {ddoc, view_name} = split_ddoc_view(schema, ddoc_view)
+  #TODO: typespec for result
+  @spec multiple_all(Ecto.Repo.t, schema_map_fun, list(fetch_options), processor_options) :: term()
+  def multiple_all(repo, schema_map, ddoc_view, queries, processor_opts \\ []) do
+    {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
     url = "_design/#{ddoc}/_view/#{view_name}/queries"
     body = %{queries: queries}
     with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req(url, :post, body),
          {:ok, result} <- coerce_multiple_all_response(response)
     do
-      {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema, processor_opts)}
+      {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema_map, processor_opts)}
     else
       {:error, reason} -> {:error, reason}
     end
@@ -81,13 +82,13 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec find(Ecto.Repo.t, Ecto.Schema.t, fetch_options, processor_options) :: {:ok, %{docs: [Ecto.Schema.t()], bookmark: String.t, warning: term()}} | {:error, term()}
-  def find(repo, schema, query, processor_opts \\ []) do
+  @spec find(Ecto.Repo.t, schema_map_fun, fetch_options, processor_options) :: {:ok, %{docs: [Ecto.Schema.t()], bookmark: String.t, warning: term()}} | {:error, term()}
+  def find(repo, schema_map, query, processor_opts \\ []) do
     query_as_map = query |> Enum.into(%{})
     with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req("_find", :post, query_as_map),
          {:ok, result} <- coerce_find_response(response)
     do
-      {:ok, ResultProcessor.process_result(:find, result, repo, schema, processor_opts)}
+      {:ok, ResultProcessor.process_result(:find, result, repo, schema_map, processor_opts)}
     else
       {:error, reason} -> {:error, reason}
     end
@@ -113,14 +114,14 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec search(Ecto.Repo.t, Ecto.Schema.t, ddoc_view, fetch_options, processor_options) :: {:ok, %{docs: [Ecto.Schema.t()], bookmark: String.t, total_rows: non_neg_integer()}} | {:error, term()}
-  def search(repo, schema, ddoc_view, query, processor_opts \\ []) do
-    {ddoc, view_name} = split_ddoc_view(schema, ddoc_view)
+  @spec search(Ecto.Repo.t, schema_map_fun, ddoc_view, fetch_options, processor_options) :: {:ok, %{docs: [Ecto.Schema.t()], bookmark: String.t, total_rows: non_neg_integer()}} | {:error, term()}
+  def search(repo, schema_map, ddoc_view, query, processor_opts \\ []) do
+    {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
     search_endpoint = "_design/#{ddoc}/_search/#{view_name}"
     with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req(search_endpoint, :post, query),
          {:ok, result} <- coerce_search_response(response)
     do
-      {:ok, ResultProcessor.process_result(:search, result, repo, schema, processor_opts)}
+      {:ok, ResultProcessor.process_result(:search, result, repo, schema_map, processor_opts)}
     else
       {:error, reason} -> {:error, reason}
     end

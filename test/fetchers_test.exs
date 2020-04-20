@@ -339,7 +339,7 @@ defmodule Couchdb.Ecto.FetchersTest do
     end
 
     test "get and fetch preloading has_many" do
-      {:ok, pf} = Fetchers.get(TestRepo, User, "test-user", [include_docs: true], [preload: :posts])
+      {:ok, pf} = Fetchers.get(TestRepo, User, "test-user", [], [preload: :posts])
       assert length(pf.posts) == 3
     end
 
@@ -352,6 +352,46 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert a.user_id == "test-user-id-john"
       assert not is_nil(a.user)
       assert a.user._id == "test-user-id-john"
+    end
+
+  end
+
+  describe "fetch with with schema map" do
+    
+    setup do
+      create_views!(@schema_design_docs)
+      user = TestRepo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
+      post = TestRepo.insert! %Post{title: "lorem", body: "lorem ipsum", user: user}
+      map_fun = fn %{type: type} ->        
+        case type do
+          "User" -> User
+          "Post" -> Post
+          _ -> nil
+        end
+      end
+      %{user: user, post: post, map_fun: map_fun}
+    end
+
+    test "get", %{user: user, post: post, map_fun: map_fun} do
+      assert {:ok, %User{} = fetched_user} = Fetchers.get(TestRepo, map_fun, user._id)
+      assert fetched_user._id == user._id
+      assert fetched_user._rev == user._rev
+      assert fetched_user.username == user.username
+      assert {:ok, %Post{} = fetched_post} = Fetchers.get(TestRepo, map_fun, post._id)
+      assert fetched_post._id == post._id
+      assert fetched_post._rev == post._rev
+      assert fetched_post.title == post.title
+    end
+
+    test "get and preload", %{user: user, post: post, map_fun: map_fun} do
+      assert {:ok, %Post{} = fetched_post} = Fetchers.get(TestRepo, map_fun, post._id, [], [preload: :user])
+      assert fetched_post._id == post._id
+      assert fetched_post._rev == post._rev
+      assert fetched_post.title == post.title
+      fetched_user = fetched_post.user      
+      assert fetched_user._id == user._id
+      assert fetched_user._rev == user._rev
+      assert fetched_user.username == user.username
     end
 
   end
