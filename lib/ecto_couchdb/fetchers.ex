@@ -2,7 +2,7 @@ defmodule Couchdb.Ecto.Fetchers do
   import Couchdb.Ecto.Helpers
   alias Couchdb.Ecto.ResultProcessor
 
-  @type schema_map_fun :: Ecto.Schema.t | (ICouch.Document.t -> Ecto.Schema.t)
+  @type schema_map_fun :: Ecto.Schema.t | (ICouch.Document.t -> Ecto.Schema.t) | :raw
   @type ddoc_view :: {String.t, String.t} | String.t
   @type fetch_options :: term()
   @type preload_options :: atom() | [atom()] | [preload: preload_options]

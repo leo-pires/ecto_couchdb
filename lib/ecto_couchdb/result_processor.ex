@@ -63,19 +63,17 @@ defmodule Couchdb.Ecto.ResultProcessor do
       "_attachments", acc ->
         acc
       raw_field_name, acc ->
-        field_name = raw_field_name |> field_name
         value = doc |> ICouch.Document.get(raw_field_name)
-        [{field_name, value} |> process_field(payload) | acc]
+        [{raw_field_name, value} |> process_field(payload) | acc]
     end)
     attachments_fields = doc.attachment_order |> Enum.reduce([], fn raw_attachment_name, acc ->
-      [{raw_attachment_name |> field_name, doc |> process_attachment(raw_attachment_name)} | acc]
+      [{raw_attachment_name, doc |> process_attachment(raw_attachment_name)} | acc]
     end)
     (regular_fields ++ attachments_fields) |> Map.new |> postprocess_doc(payload)
   end
   defp process_doc(value, _payload) do
     value
   end
-  defp field_name(field_str), do: field_str |> String.to_atom
 
   defp process_field(nil, _), do: nil
   defp process_field(map, payload) when is_map(map), do: map |> process_doc(payload)
@@ -90,13 +88,16 @@ defmodule Couchdb.Ecto.ResultProcessor do
     end
   end
 
-  defp postprocess_doc(map, %{schema_map: schema_map} = payload) do
-    map |> postprocess_load(schema_map) |> inject_preloads(payload)
+  defp postprocess_doc(map, %{schema_map: :raw}) do
+    map
   end
-
-  defp postprocess_load(map, schema_map) do
-    schema = check_schema_map(map, schema_map)
-    Ecto.Repo.Schema.load(Couchdb.Ecto, schema, map)
+  defp postprocess_doc(map, %{schema_map: schema_map_fun} = payload) when is_function(schema_map_fun) do
+    schema = check_schema_map(map, schema_map_fun)
+    postprocess_doc(map, payload |> Map.put(:schema_map, schema))
+  end
+  defp postprocess_doc(map, %{schema_map: schema} = payload) do
+    atomized_map = map |> Enum.map(fn {k, v} -> {k |> String.to_atom, v} end) |> Map.new
+    Ecto.Repo.Schema.load(Couchdb.Ecto, schema, atomized_map) |> inject_preloads(payload)
   end
 
   ###

@@ -356,13 +356,13 @@ defmodule Couchdb.Ecto.FetchersTest do
 
   end
 
-  describe "fetch with with schema map" do
+  describe "fetch with schema map" do
     
     setup do
       create_views!(@schema_design_docs)
       user = TestRepo.insert! %User{_id: "test-user-id1", username: "bob", email: "bob@gmail.com"}
       post = TestRepo.insert! %Post{title: "lorem", body: "lorem ipsum", user: user}
-      map_fun = fn %{type: type} ->        
+      map_fun = fn %{"type" => type} ->
         case type do
           "User" -> User
           "Post" -> Post
@@ -392,6 +392,29 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert fetched_user._id == user._id
       assert fetched_user._rev == user._rev
       assert fetched_user.username == user.username
+    end
+
+  end
+
+  describe "fetch return raw" do
+
+    setup do
+      clear_db!()
+      create_views!(@schema_design_docs)
+      TestRepo.insert! %User{_id: "test-user-id0", username: "bob", email: "bob@gmail.com"}
+      :ok
+    end
+
+    test "get raw" do
+      assert {:ok, u} = Fetchers.get(TestRepo, User, "test-user-id0")
+      assert {:ok, u_raw} = Fetchers.get(TestRepo, :raw, "test-user-id0")
+      assert u_raw["username"] == u.username
+    end
+
+    test "all raw" do
+      assert {:ok, u} = Fetchers.get(TestRepo, User, "test-user-id0")
+      {:ok, [u_raw]} = Fetchers.all(TestRepo, :raw, {"User", :all}, include_docs: true)
+      assert u_raw["username"] == u.username
     end
 
   end

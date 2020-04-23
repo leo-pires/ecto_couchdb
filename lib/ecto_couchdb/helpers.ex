@@ -54,6 +54,7 @@ defmodule Couchdb.Ecto.Helpers do
 
   @spec split_ddoc_view(Ecto.Schema.schema(), {String.t, String.t} | String.t) :: {String.t, String.t}
   def split_ddoc_view(_schema, {ddoc, view_name}), do: {ddoc, view_name}
+  def split_ddoc_view(:raw, _view_name), do: raise "Invalid ddoc_view, for :raw use {ddoc, view_name}"
   def split_ddoc_view(schema, view_name), do: {ddoc_name(schema), view_name}
 
 end
