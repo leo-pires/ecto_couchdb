@@ -1,16 +1,17 @@
 # TODO: typespec
 defmodule Couchdb.Ecto.Helpers do
 
-  def server_from_config(config, try_session? \\ false) do
-    url = config |> Keyword.get(:couchdb_url)
-    server = url |> ICouch.server_connection
-    if try_session? do
-      try_session(server, url)
-    else
-      server
+  def server_from_config(config) do
+    case {config |> Keyword.get(:couchdb_url), config |> Keyword.get(:database)} do
+      {nil, _database} ->
+        nil
+      {_url, nil} ->
+        nil
+      {url, _database} ->
+        url |> ICouch.server_connection
     end
   end
-  defp try_session(orig_server, url) do
+  def try_session(orig_server, url) do
     try do
       {user, password} = orig_server |> ICouch.Server.credentials
       body = %{name: user, password: password} |> Poison.encode!

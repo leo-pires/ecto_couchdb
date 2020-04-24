@@ -20,7 +20,7 @@ defmodule Couchdb.Ecto do
   def init(config) do
     child_spec = Supervisor.Spec.supervisor(Supervisor, [[], [strategy: :one_for_one]])
     server = server_from_config(config)
-    db = server |> db_from_config(config)
+    db = if server, do: server |> db_from_config(config)
     adapter_meta = %{server: server, db: db}
     {:ok, child_spec, adapter_meta}
   end
