@@ -23,7 +23,7 @@ defmodule Couchdb.Ecto.RepoFetchers do
         end
       end
 
-      @spec one(schema_map :: Fetchers.schema_map_fun(), ddoc_view :: Fetchers.ddoc_view(), fetch_opts :: Fetchers.fetch_options(), processor_opts :: Fetchers.processor_options()) :: Fetchers.doc_result() | nil | {:error, :too_many_results | any()}
+      @spec one(schema_map :: Fetchers.schema_map_fun(), ddoc_view :: Fetchers.ddoc_view(), fetch_opts :: Fetchers.fetch_options(), processor_opts :: Fetchers.processor_options()) :: Fetchers.doc_result() | nil | {:error, :view_not_found | :too_many_results | any()}
       def one(schema_or_map, ddoc_view, fetch_opts \\ [], processor_opts \\ []) do
         case Couchdb.Ecto.Fetchers.one(__MODULE__, schema_or_map, ddoc_view, fetch_opts, processor_opts) do
           {:ok, data} -> data
@@ -42,7 +42,7 @@ defmodule Couchdb.Ecto.RepoFetchers do
         end
       end
 
-      @spec all(schema_map :: Fetchers.schema_map_fun, ddoc_view :: Fetchers.ddoc_view(), fetch_opts :: Fetchers.fetch_options(), processor_opts :: Fetchers.processor_options()) :: {:ok, list(Fetchers.doc_result())} | {:error, any()}
+      @spec all(schema_map :: Fetchers.schema_map_fun, ddoc_view :: Fetchers.ddoc_view(), fetch_opts :: Fetchers.fetch_options(), processor_opts :: Fetchers.processor_options()) :: {:ok, list(Fetchers.doc_result())} | {:error, :view_not_found | any()}
       def all(schema_or_map, ddoc_view, fetch_opts \\ [], processor_opts \\ []) do
         case Couchdb.Ecto.Fetchers.all(__MODULE__, schema_or_map, ddoc_view, fetch_opts, processor_opts) do
           {:ok, data} -> data

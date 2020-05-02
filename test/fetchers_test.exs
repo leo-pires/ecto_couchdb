@@ -155,7 +155,8 @@ defmodule Couchdb.Ecto.FetchersTest do
     end
 
     test "returns error if invalid view name" do
-      assert {:error, :not_found} = Fetchers.all(TestRepo, Post, :xpto, [], [])
+      assert {:error, :view_not_found} = Fetchers.one(TestRepo, Post, :xpto, [], [])
+      assert {:error, :view_not_found} = Fetchers.all(TestRepo, Post, :xpto, [], [])
     end
 
   end
