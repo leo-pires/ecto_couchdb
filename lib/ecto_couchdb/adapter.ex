@@ -192,7 +192,7 @@ defmodule Couchdb.Ecto do
       {k, v}, acc -> Map.put(acc, k |> to_string, prepare_attachment(v))
     end)
   end
-  # TODO: usar ICouch
+  # TODO: handle attachments with ICouch
   defp prepare_attachment(%{"content_type" => content_type, "stub" => true}) do
     do_prepare_attachment(content_type, nil)
   end

@@ -64,7 +64,7 @@ defmodule Couchdb.Ecto.RepoTest do
     setup do
       create_views!(@schema_design_docs)
       insert_docs!(@posts)
-      {:ok, posts} = Fetchers.all(TestRepo, Post, :all, include_docs: true)
+      {:ok, posts} = Fetchers.all(TestRepo, Post, :all, [include_docs: true], [])
       %{posts: posts}
     end
 
@@ -310,7 +310,7 @@ defmodule Couchdb.Ecto.RepoTest do
     test "map cast" do
       d = %{"a" => "a", "b" => ["b"], "c" => [%{"foo" => 1, "goo" => 2}, %{"foo" => 3, "goo" => 4}], "d" => %{"bar" => 3}}
       {:ok, pc} = E.changeset(%E{}, %{t: "a", u: nil, d: d, f: %{t: nil}}) |> TestRepo.insert
-      {:ok, pf} = Fetchers.get(TestRepo, E, pc._id)
+      {:ok, pf} = Fetchers.get(TestRepo, E, pc._id, [], [])
       assert pf._id == pc._id
       assert pf.t == "a"
       assert is_nil(pf.u)
@@ -339,7 +339,7 @@ defmodule Couchdb.Ecto.RepoTest do
         %{"a2" => "a", "b2" => ["b"], "c2" => [%{"foo" => 1, "goo" => 2}, %{"foo" => 3, "goo" => 4}], "d2" => %{"bar" => 3}, "f2" => []}
       ]
       {:ok, pc} = G.changeset(%G{}, %{x: x}) |> TestRepo.insert
-      {:ok, pf} = TestRepo |> Fetchers.get(G, pc._id)
+      {:ok, pf} = TestRepo |> Fetchers.get(G, pc._id, [], [])
       assert pf._id == pc._id
       assert pf.x == x
     end
@@ -407,7 +407,7 @@ defmodule Couchdb.Ecto.RepoTest do
       assert f1["time_usec"] == time_usec |> Time.to_iso8601
       assert f1["time"] == time_truncate |> Time.to_iso8601
       # check fetched
-      {:ok, f2} = Fetchers.get(TestRepo, TestUTCDate, i._id)
+      {:ok, f2} = Fetchers.get(TestRepo, TestUTCDate, i._id, [], [])
       assert f2._id == i._id
       assert f2._rev == i._rev
       assert f2.datetime_usec == datetime_usec
@@ -445,8 +445,8 @@ defmodule Couchdb.Ecto.RepoTest do
       {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment1}) |> TestRepo.insert
       assert ai.example_attachment.data == %{foo: "goo"}
       # revpos
-      {:ok, aif1} = Fetchers.get(TestRepo, TestAttachment, ai._id, attachments: true)
-      {:ok, aif2} = Fetchers.get(TestRepo, TestAttachment, ai._id)
+      {:ok, aif1} = Fetchers.get(TestRepo, TestAttachment, ai._id, [attachments: true], [])
+      {:ok, aif2} = Fetchers.get(TestRepo, TestAttachment, ai._id, [], [])
       assert aif1._id == ai._id
       assert aif1._rev == ai._rev
       assert aif2._id == ai._id
@@ -460,8 +460,8 @@ defmodule Couchdb.Ecto.RepoTest do
       assert au._id == ai._id
       assert au._rev > ai._rev
       # revpos
-      assert au.example_attachment.data == %{bar: "baz"} # alterar para string
-      {:ok, auf1} = Fetchers.get(TestRepo, TestAttachment, au._id, attachments: true)
+      assert au.example_attachment.data == %{bar: "baz"}
+      {:ok, auf1} = Fetchers.get(TestRepo, TestAttachment, au._id, [attachments: true], [])
       assert auf1._id == au._id
       assert auf1._rev == au._rev
       assert %Attachment{content_type: "application/json", data: %{"bar" => "baz"}} = auf1.example_attachment
@@ -471,7 +471,7 @@ defmodule Couchdb.Ecto.RepoTest do
     test "preserve attachment if stub on update" do
       attachment = %{content_type: "application/json", data: %{foo: "goo"}}
       {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment}) |> TestRepo.insert
-      {:ok, aif} = Fetchers.get(TestRepo, TestAttachment, ai._id)
+      {:ok, aif} = Fetchers.get(TestRepo, TestAttachment, ai._id, [], [])
       assert aif._id == ai._id
       assert %Attachment{content_type: "application/json", data: nil} = aif.example_attachment
       {:ok, au} = TestAttachment.changeset(ai, %{title: "bar"}) |> TestRepo.update
@@ -479,7 +479,7 @@ defmodule Couchdb.Ecto.RepoTest do
       assert au._rev > ai._rev
       assert au.title == "bar"
       # revpos
-      {:ok, auf} = Fetchers.get(TestRepo, TestAttachment, ai._id, attachments: true)
+      {:ok, auf} = Fetchers.get(TestRepo, TestAttachment, ai._id, [attachments: true], [])
       assert au._id == ai._id
       assert au._rev > ai._rev
       assert auf._id == au._id
@@ -492,7 +492,7 @@ defmodule Couchdb.Ecto.RepoTest do
     test "remove attachment if nil on update" do
       attachment = %{content_type: "application/json", data: %{foo: "goo"}}
       {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment}) |> TestRepo.insert
-      {:ok, aif} = Fetchers.get(TestRepo, TestAttachment, ai._id)
+      {:ok, aif} = Fetchers.get(TestRepo, TestAttachment, ai._id, [], [])
       assert aif._id == ai._id
       assert %Attachment{content_type: "application/json", data: nil} = aif.example_attachment
       {:ok, au} = TestAttachment.changeset(ai, %{title: "bar", example_attachment: nil}) |> TestRepo.update
@@ -500,7 +500,7 @@ defmodule Couchdb.Ecto.RepoTest do
       assert au._rev > ai._rev
       assert au.title == "bar"
       # revpos
-      {:ok, auf} = Fetchers.get(TestRepo, TestAttachment, ai._id, attachments: true)
+      {:ok, auf} = Fetchers.get(TestRepo, TestAttachment, ai._id, [attachments: true], [])
       assert au._id == ai._id
       assert au._rev > ai._rev
       assert auf._id == au._id
@@ -520,7 +520,7 @@ defmodule Couchdb.Ecto.RepoTest do
       assert ai.example_attachment.data == %{"foo" => 1}
       assert ai.other_attachment.content_type == "foogoo"
       assert ai.other_attachment.data == "foogoo"
-      {:ok, af} = Fetchers.get(TestRepo, TestAttachment, ai._id, attachments: true)
+      {:ok, af} = Fetchers.get(TestRepo, TestAttachment, ai._id, [attachments: true], [])
       assert af._id == ai._id
       assert af._rev == ai._rev
       assert af.example_attachment.content_type == ai.example_attachment.content_type
@@ -534,8 +534,8 @@ defmodule Couchdb.Ecto.RepoTest do
       attachment = %{content_type: "application/json", data: %{foo: "goo"}}
       ai = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment}) |> TestRepo.insert!
       # without_doc not returning attachment
-      {:ok, fetch_one1} = TestRepo |> Fetchers.one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true)
-      {:ok, fetch_all1} = TestRepo |> Fetchers.all(TestAttachment, :all_without_doc, include_docs: true)
+      {:ok, fetch_one1} = TestRepo |> Fetchers.one(TestAttachment, :all_without_doc, [key: ai._id, include_docs: true], [])
+      {:ok, fetch_all1} = TestRepo |> Fetchers.all(TestAttachment, :all_without_doc, [include_docs: true], [])
       fetch_all1 = fetch_all1 |> hd
       assert fetch_one1._id == ai._id
       assert fetch_one1._rev == ai._rev
@@ -544,8 +544,8 @@ defmodule Couchdb.Ecto.RepoTest do
       assert fetch_all1._rev == ai._rev
       assert %Attachment{content_type: "application/json", data: nil} = fetch_all1.example_attachment
       # without_doc returning attachment
-      {:ok, fetch_one2} = TestRepo |> Fetchers.one(TestAttachment, :all_without_doc, key: ai._id, include_docs: true, attachments: true)
-      {:ok, fetch_all2} = TestRepo |> Fetchers.all(TestAttachment, :all_without_doc, include_docs: true, attachments: true)
+      {:ok, fetch_one2} = TestRepo |> Fetchers.one(TestAttachment, :all_without_doc, [key: ai._id, include_docs: true, attachments: true], [])
+      {:ok, fetch_all2} = TestRepo |> Fetchers.all(TestAttachment, :all_without_doc, [include_docs: true, attachments: true], [])
       fetch_all2 = fetch_all2 |> hd
       assert fetch_one2._id == ai._id
       assert fetch_one2._rev == ai._rev
@@ -556,8 +556,8 @@ defmodule Couchdb.Ecto.RepoTest do
       assert %Attachment{content_type: "application/json", data: %{"foo" => "goo"}} = fetch_one2.example_attachment
       assert fetch_all2.example_attachment.revpos == 1
       # with_doc
-      {:ok, fetch_one3} = TestRepo |> Fetchers.one(TestAttachment, :all_with_doc, key: ai._id, include_docs: true, attachments: true)
-      {:ok, fetch_all3} = TestRepo |> Fetchers.all(TestAttachment, :all_with_doc, include_docs: true, attachments: true)
+      {:ok, fetch_one3} = TestRepo |> Fetchers.one(TestAttachment, :all_with_doc, [key: ai._id, include_docs: true, attachments: true], [])
+      {:ok, fetch_all3} = TestRepo |> Fetchers.all(TestAttachment, :all_with_doc, [include_docs: true, attachments: true], [])
       fetch_all3 = fetch_all3 |> hd
       assert fetch_one3._id == ai._id
       assert fetch_one3._rev == ai._rev
@@ -595,15 +595,15 @@ defmodule Couchdb.Ecto.RepoTest do
     end
 
     test "insert and update from changeset", %{} do
-      {:ok, list} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list} = Fetchers.all(TestRepo, User, :all, [], [])
       assert [] == list
       {:ok, ui} = User.changeset(%User{}, %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}) |> TestRepo.insert
-      {:ok, list} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list} = Fetchers.all(TestRepo, User, :all, [], [])
       assert [_] = list
       assert ui._id == "test-user-id"
       assert ui._rev
       assert ui.type == "User"
-      {:ok, uq1} = Fetchers.get(TestRepo, User, "test-user-id")
+      {:ok, uq1} = Fetchers.get(TestRepo, User, "test-user-id", [], [])
       assert ui._id == uq1._id
       assert ui._rev == uq1._rev
       assert ui.type == uq1.type
@@ -613,9 +613,9 @@ defmodule Couchdb.Ecto.RepoTest do
       assert ui.updated_at == uq1.updated_at
       :timer.sleep(1000)
       {:ok, uu} = User.changeset(uq1, %{username: "silent bob", email: "silent.bob@gmail.com"}) |> TestRepo.update
-      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all, [], [])
       assert [_] = list_user
-      {:ok, uq2} = Fetchers.get(TestRepo, User, "test-user-id")
+      {:ok, uq2} = Fetchers.get(TestRepo, User, "test-user-id", [], [])
       assert uu._id == uq1._id
       assert uu._rev != uq1._rev
       assert uu._id == uq2._id
@@ -630,11 +630,11 @@ defmodule Couchdb.Ecto.RepoTest do
     end
 
     test "cast_assoc" do
-      {:ok, list} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list} = Fetchers.all(TestRepo, User, :all, [], [])
       assert list == []
       {:ok, inserted} = Post.changeset_user(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id", username: "bob", email: "bob@gmail.com"}}) |> TestRepo.insert
       assert inserted.user_id == inserted.user._id
-      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all, [], [])
       assert [_] = list_user
     end
   end
@@ -662,34 +662,34 @@ defmodule Couchdb.Ecto.RepoTest do
     end
 
     test "update from get" do
-      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all, [], [])
       assert length(list_post) == 3
-      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all, [], [])
       assert [_] = list_user
       pc = Post.changeset(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id2", username: "alice", password: "alice@gmail.com"}}) |> TestRepo.insert!
-      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all, [], [])
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all, [], [])
       assert [_] = list_user
-      {:ok, pf} = Fetchers.get(TestRepo, Post, pc._id)
+      {:ok, pf} = Fetchers.get(TestRepo, Post, pc._id, [], [])
       assert not is_nil(pf)
       TestRepo.update! Post.changeset(pf, %{title: "new lorem", body: "new lorem ipsum"})
-      {:ok, pu} = Fetchers.get(TestRepo, Post, pc._id)
+      {:ok, pu} = Fetchers.get(TestRepo, Post, pc._id, [], [])
       assert pu._id == pf._id
       assert pu._rev != pf._rev
       assert pu.title == "new lorem"
       assert pu.body == "new lorem ipsum"
-      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all, [], [])
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all, [], [])
       assert [_] = list_user
     end
 
     test "update including association from get" do
       pc = Post.changeset_user(%Post{}, %{title: "lorem", body: "lorem ipsum", user: %{_id: "test-user-id3", username: "john", email: "john@gmail.com"}}) |> TestRepo.insert!
-      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all, [], [])
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all, [], [])
       assert length(list_user) == 2
       {:ok, pf1} = Fetchers.get(TestRepo, Post, pc._id, [], [preload: :user])
       assert not is_nil(pf1)
@@ -702,9 +702,9 @@ defmodule Couchdb.Ecto.RepoTest do
       assert pf1.user.username == "john"
       assert pf1.user.email == "john@gmail.com"
       pu = TestRepo.update! Post.changeset_user(pf1, %{title: "new lorem", body: "new lorem ipsum", user: %{username: "doe", email: "doe@gmail.com"}})
-      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all)
+      {:ok, list_post} = Fetchers.all(TestRepo, Post, :all, [], [])
       assert length(list_post) == 4
-      {:ok, list_user} = Fetchers.all(TestRepo, User, :all)
+      {:ok, list_user} = Fetchers.all(TestRepo, User, :all, [], [])
       assert length(list_user) == 2
       {:ok, pf2} = Fetchers.get(TestRepo, Post, pc._id, [], [preload: :user])
       assert pf2.user_id == pc.user._id
@@ -718,7 +718,7 @@ defmodule Couchdb.Ecto.RepoTest do
       assert pf2._rev != pc._rev
       assert pf2.title == "new lorem"
       assert pf2.body == "new lorem ipsum"
-      {:ok, uf2} = Fetchers.get(TestRepo, User, pc.user._id)
+      {:ok, uf2} = Fetchers.get(TestRepo, User, pc.user._id, [], [])
       assert uf2._id == pf2.user_id
       assert uf2._id == pf2.user._id
       assert uf2._id == pc.user._id

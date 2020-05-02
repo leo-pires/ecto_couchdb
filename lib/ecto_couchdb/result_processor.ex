@@ -1,8 +1,7 @@
-# TODO: typespec
 defmodule Couchdb.Ecto.ResultProcessor do
-
   alias Couchdb.Ecto.Fetchers
 
+  # TODO: typespec
   def process_result(result_type, result, repo, schema_map, opts) do
     payload = %{
       repo: repo, schema_map: schema_map,
@@ -12,6 +11,7 @@ defmodule Couchdb.Ecto.ResultProcessor do
     process(result_type, result, payload)
   end
 
+  # TODO: typespec
   def check_schema_map(map, schema_map_fun) when is_function(schema_map_fun) do
     case schema_map_fun.(map) do
       nil -> raise "Invalid schema mapping"
@@ -22,6 +22,7 @@ defmodule Couchdb.Ecto.ResultProcessor do
     schema
   end
 
+  # TODO: typespec
   def normalize_preloads(f) when is_atom(f), do: [strict_normalize_preloads(f)]
   def normalize_preloads(o), do: strict_normalize_preloads(o)
 
@@ -29,6 +30,9 @@ defmodule Couchdb.Ecto.ResultProcessor do
 
   defp process(:get, doc, payload) do
     doc |> process_doc(payload)
+  end
+  defp process(:get_many, docs, payload) do
+    docs |> Enum.map(&(process_doc(&1, payload)))
   end
   defp process(:all, %ICouch.View{} = view, payload) do
     process_rows(view.rows, payload)
@@ -53,6 +57,7 @@ defmodule Couchdb.Ecto.ResultProcessor do
   defp process_row(%{"key" => key, "value" => value}, payload) do
     row_result(key, value, payload)
   end
+  # TODO: refactor return_keys to mimics db return
   defp row_result(key, returning, %{return_keys: true}), do: {key, returning}
   defp row_result(_key, returning, %{return_keys: false}), do: returning
 
@@ -123,17 +128,17 @@ defmodule Couchdb.Ecto.ResultProcessor do
 
   defp inject_preload(nil, _repo, _preload, _association), do: nil
   defp inject_preload(value, repo, preload, %Ecto.Association.BelongsTo{related: related_schema}) do
-    {:ok, fetched} = Fetchers.get(repo, related_schema, value)
+    {:ok, fetched} = Fetchers.get(repo, related_schema, value, [], [])
     fetched |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})
   end
   defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :one, queryable: queryable}) do
     {view_name, related_schema} = related_view(queryable)
-    {:ok, fetched} = Fetchers.one(repo, related_schema, view_name, key: value, include_docs: true)
+    {:ok, fetched} = Fetchers.one(repo, related_schema, view_name, [key: value, include_docs: true], [])
     fetched |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})
   end
   defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :many, queryable: queryable}) do
     {view_name, related_schema} = related_view(queryable)
-    {:ok, fetched} = Fetchers.all(repo, related_schema, view_name, key: value, include_docs: true)
+    {:ok, fetched} = Fetchers.all(repo, related_schema, view_name, [key: value, include_docs: true], [])
     fetched |> Enum.map(&(&1 |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})))
   end
   defp inject_preload(_, _, _, association) do

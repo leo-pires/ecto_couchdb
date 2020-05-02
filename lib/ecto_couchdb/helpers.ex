@@ -1,6 +1,6 @@
-# TODO: typespec
 defmodule Couchdb.Ecto.Helpers do
 
+  @spec server_from_config(config :: any()) :: ICouch.Server.t | nil
   def server_from_config(config) do
     case {config |> Keyword.get(:couchdb_url), config |> Keyword.get(:database)} do
       {nil, _database} ->
@@ -11,6 +11,8 @@ defmodule Couchdb.Ecto.Helpers do
         url |> ICouch.server_connection
     end
   end
+
+  @spec try_session(orig_server :: ICouch.Server.t, url :: String.t | URI.t) :: ICouch.Server.t
   def try_session(orig_server, url) do
     try do
       {user, password} = orig_server |> ICouch.Server.credentials
@@ -31,21 +33,25 @@ defmodule Couchdb.Ecto.Helpers do
     end
   end
 
+  @spec server_from_repo(repo :: Ecto.Repo.t) :: ICouch.Server.t
   def server_from_repo(repo) do
     {_repo, %{server: server}} = Ecto.Repo.Registry.lookup(repo)
     server
   end
 
+  @spec db_from_config(server :: ICouch.Server.t, config :: any()) :: ICouch.Db.t
   def db_from_config(server, config) do
     server |> ICouch.DB.new(config |> Keyword.get(:database))
   end
 
+  @spec db_from_repo(repo :: Ecto.Repo.t) :: ICouch.Db.t
   def db_from_repo(repo) do
     {_repo, %{db: db}} = Ecto.Repo.Registry.lookup(repo)
     db
   end
 
-  def view_from_db(db, ddoc, view_name, params \\ []) do
+  @spec view_from_db(db :: ICouch.DB.t, ddoc :: String.t, name :: String.t, params :: map()) :: ICouch.View.t
+  def view_from_db(db, ddoc, view_name, params \\ %{}) do
     %ICouch.View{db: db, ddoc: ddoc, name: view_name, params: params}
   end
 
