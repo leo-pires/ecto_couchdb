@@ -75,7 +75,7 @@ defmodule Couchdb.Ecto do
   def autogenerate(:embed_id),  do: Ecto.UUID.generate()
 
   @impl true
-  def insert(%{db: db}, schema_meta, fields, _on_conflict, returning, _options) do
+  def insert(%{db: db} = _adapter_meta, schema_meta, fields, _on_conflict, returning, _options) do
     type = ddoc_name(schema_meta)
     doc = prepare_for_couch(type, fields, schema_meta.schema)
     case db |> ICouch.save_doc(doc) do
@@ -137,7 +137,7 @@ defmodule Couchdb.Ecto do
   end
 
   @impl true
-  def insert_all(%{db: db}, schema_meta, _header, list, _on_conflict, _returning, _options) do
+  def insert_all(%{db: db} = _adapter_meta, schema_meta, _header, list, _on_conflict, _returning, _options) do
     type = ddoc_name(schema_meta)
     docs = list |> Enum.map(&(prepare_for_couch(type, &1, schema_meta.schema)))
     case db |> ICouch.save_docs(docs) do
