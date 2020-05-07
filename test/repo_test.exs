@@ -1,5 +1,5 @@
 defmodule Couchdb.Ecto.RepoTest do
-  use Couchdb.Ecto.ModelCase, async: false
+  use Couchdb.Ecto.DataCase, async: false
   alias Couchdb.Ecto.Fetchers
   alias Couchdb.Ecto.Attachment
 
@@ -114,22 +114,20 @@ defmodule Couchdb.Ecto.RepoTest do
 
     test "raises Ecto.StaleEntryError if document is not found", %{posts: [post | _]} do
       missing_post = post |> Map.put(:_id, "not found")
-      assert_raise(Ecto.StaleEntryError,
-                   fn ->
-                     missing_post
-                     |> Ecto.Changeset.change(title: "Changed title")
-                     |> TestRepo.update
-                   end)
+      assert_raise Ecto.StaleEntryError, fn ->
+        missing_post
+        |> Ecto.Changeset.change(title: "Changed title")
+        |> TestRepo.update
+      end
     end
 
     test "raises Ecto.StaleEntryError if the document _rev does not match", %{posts: [post | _]} do
       stale_post = post |> Map.put(:_rev, "not found")
-      assert_raise(Ecto.StaleEntryError,
-                   fn ->
-                     stale_post
-                     |> Ecto.Changeset.change(title: "Changed title")
-                     |> TestRepo.update
-                   end)
+      assert_raise Ecto.StaleEntryError, fn ->
+        stale_post
+        |> Ecto.Changeset.change(title: "Changed title")
+        |> TestRepo.update
+      end
     end
 
     test "update on_conflict: :replace_all", %{db: db} do
@@ -173,19 +171,20 @@ defmodule Couchdb.Ecto.RepoTest do
       assert {:ok, _} = db |> ICouch.open_doc(hd(docs)._id)
     end
 
-    test "succeeds if the id is not found" do
-      post = struct(Post, _id: "Not found", _rev: "4-Unknown")
-      assert {:ok, _} = TestRepo.delete(post)
+    test "raises if not found" do
+      assert_raise Ecto.StaleEntryError, fn ->
+        post = struct(Post, _id: "Not found", _rev: "4-Unknown")
+        assert {:ok, _} = TestRepo.delete(post)
+      end
     end
 
     test "fails with stale if the revision is outdated", %{docs: docs} do
-      {deleted_doc, _docs} = List.pop_at(docs, 1)
-      assert_raise(Ecto.StaleEntryError,
-                   fn ->
-                     struct(Post, %{_id: deleted_doc._id, _rev: "0-outdated"})
-                     |> Ecto.Changeset.change
-                     |> TestRepo.delete
-                   end)
+      assert_raise Ecto.StaleEntryError, fn ->
+        {deleted_doc, _docs} = List.pop_at(docs, 1)
+        struct(Post, %{_id: deleted_doc._id, _rev: "0-outdated"})
+        |> Ecto.Changeset.change
+        |> TestRepo.delete
+      end
     end
 
     defmodule Other do

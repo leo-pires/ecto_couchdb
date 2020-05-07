@@ -4,7 +4,9 @@ defmodule Couchdb.Ecto.ResultProcessor do
   # TODO: typespec
   def process_result(result_type, result, repo, schema_map, opts) do
     payload = %{
-      repo: repo, schema_map: schema_map,
+      repo: repo,
+      schema_map: schema_map,
+      prefix: opts |> Keyword.get(:prefix),
       preloads: opts |> Keyword.get(:preload, []) |> normalize_preloads,
       return_keys: opts |> Keyword.get(:return_keys, false)
     }
@@ -67,12 +69,12 @@ defmodule Couchdb.Ecto.ResultProcessor do
     regular_fields = doc.fields |> Map.keys |> Enum.reduce([], fn
       "_attachments", acc ->
         acc
-      raw_field_name, acc ->
-        value = doc |> ICouch.Document.get(raw_field_name)
-        [{raw_field_name, value} |> process_field(payload) | acc]
+      field_name, acc ->
+        value = doc |> ICouch.Document.get(field_name)
+        [{field_name, value} |> process_field(payload) | acc]
     end)
-    attachments_fields = doc.attachment_order |> Enum.reduce([], fn raw_attachment_name, acc ->
-      [{raw_attachment_name, doc |> process_attachment(raw_attachment_name)} | acc]
+    attachments_fields = doc.attachment_order |> Enum.reduce([], fn attachment_name, acc ->
+      [{attachment_name, doc |> process_attachment(attachment_name)} | acc]
     end)
     (regular_fields ++ attachments_fields) |> Map.new |> postprocess_doc(payload)
   end
@@ -85,8 +87,8 @@ defmodule Couchdb.Ecto.ResultProcessor do
   defp process_field(list, payload) when is_list(list), do: list |> Enum.map(&(&1 |> process_doc(payload)))
   defp process_field(raw, _payload), do: raw
 
-  defp process_attachment(doc, raw_attachment_name) do
-    case doc |> ICouch.Document.get_attachment(raw_attachment_name) do
+  defp process_attachment(doc, attachment_name) do
+    case doc |> ICouch.Document.get_attachment(attachment_name) do
       {%{"content_type" => content_type, "revpos" => revpos}, data} ->
         %{content_type: content_type, revpos: revpos, data: data}
       _other -> :error
@@ -100,9 +102,14 @@ defmodule Couchdb.Ecto.ResultProcessor do
     schema = check_schema_map(map, schema_map_fun)
     postprocess_doc(map, payload |> Map.put(:schema_map, schema))
   end
-  defp postprocess_doc(map, %{schema_map: schema} = payload) do
-    atomized_map = map |> Enum.map(fn {k, v} -> {k |> String.to_atom, v} end) |> Map.new
-    Ecto.Repo.Schema.load(Couchdb.Ecto, schema, atomized_map) |> inject_preloads(payload)
+  defp postprocess_doc(map, %{schema_map: schema, prefix: prefix} = payload) do
+    loader = &Ecto.Type.adapter_load(Couchdb.Ecto, &1, &2)
+    Ecto.Schema.Loader.unsafe_load(schema, map, loader)
+    |> apply_prefix(prefix)
+    |> inject_preloads(payload)
+  end
+  defp apply_prefix(%{__meta__: meta} = data, prefix) do
+    %{data | __meta__: %{meta | prefix: prefix}}
   end
 
   ###
@@ -132,24 +139,17 @@ defmodule Couchdb.Ecto.ResultProcessor do
     fetched |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})
   end
   defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :one, queryable: queryable}) do
-    {view_name, related_schema} = related_view(queryable)
-    {:ok, fetched} = Fetchers.one(repo, related_schema, view_name, [key: value, include_docs: true])
+    {ddoc_view, related_schema} = queryable
+    {:ok, fetched} = Fetchers.one(repo, related_schema, ddoc_view, [key: value, include_docs: true])
     fetched |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})
   end
   defp inject_preload(value, repo, preload, %Ecto.Association.Has{cardinality: :many, queryable: queryable}) do
-    {view_name, related_schema} = related_view(queryable)
-    {:ok, fetched} = Fetchers.all(repo, related_schema, view_name, [key: value, include_docs: true])
+    {ddoc_view, related_schema} = queryable
+    {:ok, fetched} = Fetchers.all(repo, related_schema, ddoc_view, [key: value, include_docs: true])
     fetched |> Enum.map(&(&1 |> inject_preloads(%{repo: repo, schema_map: related_schema, preloads: preload})))
   end
   defp inject_preload(_, _, _, association) do
     raise "Unsupported preload type #{inspect association}"
-  end
-
-  defp related_view({view_name_str, related_schema}) do
-    {view_name_str |> String.to_atom, related_schema}
-  end
-  defp related_view(queryable) do
-    raise "Invalid queryable (#{inspect queryable})"
   end
 
 end

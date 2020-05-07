@@ -1,5 +1,5 @@
 defmodule Couchdb.Ecto.FetchersTest do
-  use Couchdb.Ecto.ModelCase, async: false
+  use Couchdb.Ecto.DataCase, async: false
   alias Couchdb.Ecto.Fetchers
 
 
@@ -155,8 +155,12 @@ defmodule Couchdb.Ecto.FetchersTest do
     end
 
     test "returns error if invalid view name" do
-      assert {:error, :view_not_found} = Fetchers.one(TestRepo, Post, :xpto)
-      assert {:error, :view_not_found} = Fetchers.all(TestRepo, Post, :xpto)
+      assert_raise RuntimeError, fn ->
+        Fetchers.one(TestRepo, Post, :xpto)
+      end
+      assert_raise RuntimeError, fn ->
+        Fetchers.all(TestRepo, Post, :xpto)
+      end
     end
 
   end

@@ -1,5 +1,5 @@
 defmodule Couchdb.Ecto.SchemaTest do
-  use Couchdb.Ecto.ModelCase, async: false
+  use Couchdb.Ecto.DataCase, async: false
 
 
   setup do

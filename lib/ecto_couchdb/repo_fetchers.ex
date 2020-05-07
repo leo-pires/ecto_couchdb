@@ -19,7 +19,7 @@ defmodule Couchdb.Ecto.RepoFetchers do
         case Couchdb.Ecto.Fetchers.get(__MODULE__, schema_or_map, doc_id, opts) do
           {:ok, nil} -> raise Ecto.NoResultsError
           {:ok, data} -> data
-          {:error, reason} -> raise "Unknown error #{reason}" # TODO: what kind of error to return instead?
+          {:error, reason} -> raise "Unknown error #{reason}"
         end
       end
 
@@ -38,7 +38,7 @@ defmodule Couchdb.Ecto.RepoFetchers do
           {:ok, nil} -> raise Ecto.NoResultsError
           {:ok, data} -> data
           {:error, :too_many_results} -> raise Ecto.MultipleResultsError
-          {:error, reason} -> raise "Unknown error #{reason}" # TODO: what kind of error to return instead?
+          {:error, reason} -> raise "Unknown error #{reason}"
         end
       end
 

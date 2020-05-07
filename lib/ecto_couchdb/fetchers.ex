@@ -15,11 +15,12 @@ defmodule Couchdb.Ecto.Fetchers do
 
 
   @processor_opts_keys [:preload, :return_keys]
-  @spec split_opts(opts :: all_options()) :: {fetch_options(), processor_options()}
+  @spec split_opts(opts :: all_options()) :: {String.t(), fetch_options(), processor_options()}
   defp split_opts(opts) do
-    fetch_opts = opts |> Keyword.drop(@processor_opts_keys)
-    processor_opts = opts |> Keyword.take(@processor_opts_keys)
-    {fetch_opts, processor_opts}
+    prefix = opts |> Keyword.get(:prefix)
+    fetch_opts = opts |> Keyword.drop(@processor_opts_keys ++ [:prefix])
+    processor_opts = opts |> Keyword.take(@processor_opts_keys ++ [:prefix])
+    {prefix, fetch_opts, processor_opts}
   end
 
   @spec get(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), doc_id :: String.t(), opts :: all_options()) :: {:ok, doc_result() | nil} | {:error, :missing_id | any()}
@@ -30,8 +31,8 @@ defmodule Couchdb.Ecto.Fetchers do
     {:error, :missing_id}
   end
   def get(repo, schema_map, doc_id, opts) do
-    {fetch_opts, processor_opts} = split_opts(opts)
-    case repo |> db_from_repo |> ICouch.open_doc(doc_id, fetch_opts) do
+    {prefix, fetch_opts, processor_opts} = split_opts(opts)
+    case repo |> db_from_repo(prefix: prefix) |> ICouch.open_doc(doc_id, fetch_opts) do
       {:ok, doc} -> {:ok, ResultProcessor.process_result(:get, doc, repo, schema_map, processor_opts)}
       {:error, :not_found} -> {:ok, nil}
       {:error, reason} -> {:error, reason}
@@ -40,8 +41,8 @@ defmodule Couchdb.Ecto.Fetchers do
 
   @spec get_many(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), docs_ids_revs :: docs_ids_revs(), opts :: all_options()) :: {:ok, list(doc_result() | nil)} | {:error, any()}
   def get_many(repo, schema_map, docs_ids_revs, opts \\ []) do
-    {fetch_opts, processor_opts} = split_opts(opts)
-    case repo |> db_from_repo |> ICouch.open_docs(docs_ids_revs, fetch_opts) do
+    {prefix, fetch_opts, processor_opts} = split_opts(opts)
+    case repo |> db_from_repo(prefix: prefix) |> ICouch.open_docs(docs_ids_revs, fetch_opts) do
       {:ok, doc} -> {:ok, ResultProcessor.process_result(:get_many, doc, repo, schema_map, processor_opts)}
       {:error, reason} -> {:error, reason}
     end
@@ -59,21 +60,22 @@ defmodule Couchdb.Ecto.Fetchers do
 
   @spec all(repo :: Ecto.Repo.t, schema_map :: schema_map_fun, ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, list(doc_result())} | {:error, :view_not_found | any()}
   def all(repo, schema_map, ddoc_view, opts \\ []) do
-    {fetch_opts, processor_opts} = split_opts(opts)
+    {prefix, fetch_opts, processor_opts} = split_opts(opts)
     {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
-    case repo |> db_from_repo |> view_from_db(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
+    case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
       {:ok, view} -> {:ok, ResultProcessor.process_result(:all, view, repo, schema_map, processor_opts)}
-      {:error, :not_found} -> {:error, :view_not_found}
+      {:error, :not_found} -> raise "Design doc/view #{ddoc}/#{view_name} not found!"
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @spec multiple_all(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), queries :: map(), processor_opts :: processor_options()) :: {:ok, list(list(doc_result()))} | {:error, any()}
-  def multiple_all(repo, schema_map, ddoc_view, queries, processor_opts \\ []) do
+  @spec multiple_all(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), queries :: map(), opts :: all_options()) :: {:ok, list(list(doc_result()))} | {:error, any()}
+  def multiple_all(repo, schema_map, ddoc_view, queries, opts \\ []) do
+    {prefix, _, processor_opts} = split_opts(opts)
     {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
     url = "_design/#{ddoc}/_view/#{view_name}/queries"
     body = %{queries: queries}
-    with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req(url, :post, body),
+    with {:ok, response} <- repo |> db_from_repo(prefix: prefix) |> ICouch.DB.send_req(url, :post, body),
          {:ok, result} <- coerce_multiple_all_response(response)
     do
       {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema_map, processor_opts)}
@@ -112,10 +114,10 @@ defmodule Couchdb.Ecto.Fetchers do
   end
 
   @spec find(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), opts :: all_options()) :: {:ok, find_result()} | {:error, any()}
-  def find(repo, schema_map, opts \\ []) do
-    {query, processor_opts} = split_opts(opts)
+  def find(repo, schema_map, opts) do
+    {prefix, query, processor_opts} = split_opts(opts)
     query_as_map = query |> Enum.into(%{})
-    with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req("_find", :post, query_as_map),
+    with {:ok, response} <- repo |> db_from_repo(prefix: prefix) |> ICouch.DB.send_req("_find", :post, query_as_map),
          {:ok, result} <- coerce_find_response(response)
     do
       {:ok, ResultProcessor.process_result(:find, result, repo, schema_map, processor_opts)}
@@ -146,10 +148,11 @@ defmodule Couchdb.Ecto.Fetchers do
 
   @spec search(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, search_result()} | {:error, any()}
   def search(repo, schema_map, ddoc_view, opts \\ []) do
-    {query, processor_opts} = split_opts(opts)
+    {prefix, query, processor_opts} = split_opts(opts)
+    query_as_map = query |> Enum.into(%{})
     {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
     search_endpoint = "_design/#{ddoc}/_search/#{view_name}"
-    with {:ok, response} <- repo |> db_from_repo |> ICouch.DB.send_req(search_endpoint, :post, query),
+    with {:ok, response} <- repo |> db_from_repo(prefix: prefix) |> ICouch.DB.send_req(search_endpoint, :post, query_as_map),
          {:ok, result} <- coerce_search_response(response)
     do
       {:ok, ResultProcessor.process_result(:search, result, repo, schema_map, processor_opts)}

@@ -75,11 +75,15 @@ defmodule Couchdb.Ecto do
   def autogenerate(:embed_id),  do: Ecto.UUID.generate()
 
   @impl true
-  def insert(%{db: db} = _adapter_meta, schema_meta, fields, _on_conflict, returning, _options) do
-    type = ddoc_name(schema_meta)
+  def insert(adapter_meta, schema_meta, fields, _on_conflict, returning, _options) do
+    db = db_from_meta(adapter_meta, schema_meta)
+    type = type_from_schema(schema_meta)
     doc = prepare_for_couch(type, fields, schema_meta.schema)
     case db |> ICouch.save_doc(doc) do
-      {:ok, doc} -> {:ok, doc |> prepare_for_return(returning)}
+      {:ok, doc} ->
+        {:ok, doc |> prepare_for_return(returning)}
+      {:error, :not_found} ->
+        raise "Database #{db.name} not found!"
       {:error, :conflict} ->
         {:invalid, [unique: "#{type}_id_index"]}
       {:error, reason} ->
@@ -88,8 +92,9 @@ defmodule Couchdb.Ecto do
   end
 
   @impl true
-  def update(%{db: db} = adapter_meta, schema_meta, fields, filters, returning, options) do
-    type = ddoc_name(schema_meta)
+  def update(adapter_meta, schema_meta, fields, filters, returning, options) do
+    db = db_from_meta(adapter_meta, schema_meta)
+    type = type_from_schema(schema_meta)
     with {:ok, fetched_doc} <- do_fetch_for_update(db, filters),
          changes = prepare_for_couch(type, fetched_doc, fields, schema_meta.schema),
          {:ok, doc} <- db |> ICouch.save_doc(changes)
@@ -118,13 +123,15 @@ defmodule Couchdb.Ecto do
   end
 
   @impl true
-  def delete(%{db: db} = adapter_meta, schema_meta, filters, options) do
+  def delete(adapter_meta, schema_meta, filters, options) do
+    db = db_from_meta(adapter_meta, schema_meta)
     id = filters |> Keyword.get(:_id)
     rev = filters |> Keyword.get(:_rev)
     case db |> ICouch.delete_doc(%{"_id" => id, "_rev" => rev}) do
-      {:ok, _doc} -> {:ok, []}
-      {:error, :not_found} ->
+      {:ok, _doc} ->
         {:ok, []}
+      {:error, :not_found} ->
+        {:error, :stale}
       {:error, :conflict} ->
         case handle_conflict(db, filters, options) do
           {:ok, new_filters} -> delete(adapter_meta, schema_meta, new_filters, options)
@@ -137,12 +144,17 @@ defmodule Couchdb.Ecto do
   end
 
   @impl true
-  def insert_all(%{db: db} = _adapter_meta, schema_meta, _header, list, _on_conflict, _returning, _options) do
-    type = ddoc_name(schema_meta)
+  def insert_all(adapter_meta, schema_meta, _header, list, _on_conflict, _returning, _options) do
+    db = db_from_meta(adapter_meta, schema_meta)
+    type = type_from_schema(schema_meta)
     docs = list |> Enum.map(&(prepare_for_couch(type, &1, schema_meta.schema)))
     case db |> ICouch.save_docs(docs) do
-      {:ok, docs} -> {docs |> length, nil}
-      {:error, reason} -> raise "Error while inserting all (#{inspect(reason)})"
+      {:ok, docs} ->
+        {docs |> length, nil}
+      {:error, :not_found} ->
+        raise "Database #{db.name} not found!"
+      {:error, reason} ->
+        raise "Error while inserting all (#{inspect(reason)})"
     end
   end
 

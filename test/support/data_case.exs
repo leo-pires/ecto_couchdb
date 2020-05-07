@@ -1,4 +1,4 @@
-defmodule Couchdb.Ecto.ModelCase do
+defmodule Couchdb.Ecto.DataCase do
   use ExUnit.CaseTemplate
 
   using do
@@ -10,29 +10,30 @@ defmodule Couchdb.Ecto.ModelCase do
       @repo TestRepo
 
 
-      def clear_db!(stack_size \\ 0) do
+      def clear_db!(prefix \\ nil) do
+        server = @repo |> server_from_repo
+        db = @repo |> db_from_repo(prefix: prefix)
+        do_clear_db!(server, db, 0)
+      end
+      defp do_clear_db!(server, db, stack_size) do
         if stack_size > 3 do
           raise "Could not clear db!"
         end
-        server = @repo |> server_from_repo
-        db = @repo |> db_from_repo
-        db_name = db.name
-        # IO.inspect(server)
-        case server |> ICouch.delete_db(db_name) do
+        case server |> ICouch.delete_db(db.name) do
           {:error, :not_found} -> :ok
           :ok -> :ok
-          _error -> clear_db!(stack_size + 1)
+          _error -> do_clear_db!(server, db, stack_size + 1)
         end
-        case server |> ICouch.create_db(db_name) do
+        case server |> ICouch.create_db(db.name) do
           {:ok, _db} -> :ok
-          _error -> clear_db!(stack_size + 1)
+          _error -> do_clear_db!(server, db, stack_size + 1)
         end
         :ok
       end
 
-      def create_views!(design_docs) do
+      def create_views!(design_docs, opts \\ []) do
         design_docs |> Enum.map(fn {ddoc, code} ->
-          @repo |> Couchdb.Ecto.Storage.create_ddoc(ddoc, code)
+          @repo |> Couchdb.Ecto.Storage.create_ddoc(ddoc, code, opts)
         end)
       end
 

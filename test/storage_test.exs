@@ -1,5 +1,5 @@
 defmodule Couchdb.Ecto.StorageTest do
-  use Couchdb.Ecto.ModelCase, async: false
+  use Couchdb.Ecto.DataCase, async: false
 
 
   setup do

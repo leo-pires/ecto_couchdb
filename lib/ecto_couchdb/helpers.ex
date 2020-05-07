@@ -1,6 +1,6 @@
 defmodule Couchdb.Ecto.Helpers do
 
-  @spec server_from_config(config :: any()) :: ICouch.Server.t | nil
+  @spec server_from_config(config :: any()) :: ICouch.Server.t() | nil
   def server_from_config(config) do
     case {config |> Keyword.get(:couchdb_url), config |> Keyword.get(:database)} do
       {nil, _database} ->
@@ -12,7 +12,7 @@ defmodule Couchdb.Ecto.Helpers do
     end
   end
 
-  @spec try_session(orig_server :: ICouch.Server.t, url :: String.t | URI.t) :: ICouch.Server.t
+  @spec try_session(orig_server :: ICouch.Server.t(), url :: String.t() | URI.t()) :: ICouch.Server.t()
   def try_session(orig_server, url) do
     try do
       {user, password} = orig_server |> ICouch.Server.credentials
@@ -33,35 +33,51 @@ defmodule Couchdb.Ecto.Helpers do
     end
   end
 
-  @spec server_from_repo(repo :: Ecto.Repo.t) :: ICouch.Server.t
+  @spec server_from_repo(repo :: Ecto.Repo.t()) :: ICouch.Server.t()
   def server_from_repo(repo) do
     {_repo, %{server: server}} = Ecto.Repo.Registry.lookup(repo)
     server
   end
 
-  @spec db_from_config(server :: ICouch.Server.t, config :: any()) :: ICouch.Db.t
+  @spec db_from_config(server :: ICouch.Server.t(), config :: any()) :: ICouch.Db.t()
   def db_from_config(server, config) do
     server |> ICouch.DB.new(config |> Keyword.get(:database))
   end
 
-  @spec db_from_repo(repo :: Ecto.Repo.t) :: ICouch.Db.t
-  def db_from_repo(repo) do
-    {_repo, %{db: db}} = Ecto.Repo.Registry.lookup(repo)
-    db
+  @spec db_from_repo(repo :: Ecto.Repo.t(), opts :: Keyword.t()) :: ICouch.Db.t()
+  def db_from_repo(repo, opts \\ []) do
+    {_repo, %{server: server, db: db}} = Ecto.Repo.Registry.lookup(repo)
+    case opts |> Keyword.get(:prefix) do
+      nil -> db
+      prefix -> server |> db_with_prefix(db.name, prefix)
+    end
   end
 
-  @spec view_from_db(db :: ICouch.DB.t, ddoc :: String.t, name :: String.t, params :: map()) :: ICouch.View.t
+  @spec db_from_meta(adapter_meta :: Ecto.Adapter.Schema.adapter_meta(), schema_meta :: Ecto.Adapter.Schema.schema_meta()) :: ICouch.Db.t()
+  def db_from_meta(%{db: db}, %{prefix: nil}) do
+    db
+  end
+  def db_from_meta(%{db: db, server: server}, %{prefix: prefix}) when is_binary(prefix) do
+    server |> db_with_prefix(db.name, prefix)
+  end
+
+  @spec view_from_db(db :: ICouch.DB.t(), ddoc :: String.t(), name :: String.t(), params :: map()) :: ICouch.View.t()
   def view_from_db(db, ddoc, view_name, params \\ %{}) do
     %ICouch.View{db: db, ddoc: ddoc, name: view_name, params: params}
   end
 
-  @spec ddoc_name(Ecto.Schema.schema()) :: String.t
-  def ddoc_name(%{schema: schema}), do: schema.__schema__(:source)
-  def ddoc_name(module), do: module.__schema__(:source)
+  @spec type_from_schema(Ecto.Schema.schema()) :: String.t()
+  def type_from_schema(%{schema: schema}), do: schema.__schema__(:source)
+  def type_from_schema(module), do: module.__schema__(:source)
 
-  @spec split_ddoc_view(Ecto.Schema.schema(), {String.t, String.t} | String.t) :: {String.t, String.t}
+  @spec split_ddoc_view(Ecto.Schema.schema(), {String.t(), String.t()} | String.t()) :: {String.t(), String.t()}
   def split_ddoc_view(_schema, {ddoc, view_name}), do: {ddoc, view_name}
   def split_ddoc_view(:raw, _view_name), do: raise "Invalid ddoc_view, for :raw use {ddoc, view_name}"
-  def split_ddoc_view(schema, view_name), do: {ddoc_name(schema), view_name}
+  def split_ddoc_view(schema, view_name), do: {type_from_schema(schema), view_name}
+
+
+  defp db_with_prefix(server, db_name, prefix) do
+    server |> ICouch.DB.new(db_name <> prefix)
+  end
 
 end
