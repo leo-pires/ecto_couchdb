@@ -224,7 +224,8 @@ defmodule Couchdb.Ecto do
 
   @impl true
   def storage_status(config) do
-    case config |> server_from_config |> db_from_config(config) |> ICouch.db_info do
+    db = config |> server_from_config |> db_from_config(config)
+    case db |> ICouch.db_info do
       {:ok, _info} -> :up
       {:error, :not_found} -> :down
       {:error, reason} -> {:error, reason}
@@ -233,8 +234,9 @@ defmodule Couchdb.Ecto do
 
   @impl true
   def storage_up(config) do
-    database_name = config |> Keyword.get(:database)
-    case config |> server_from_config |> ICouch.create_db(database_name) do
+    server = server_from_config(config)
+    db = db_from_config(server, config)
+    case server |> ICouch.create_db(db.name) do
       {:ok, _db} -> :ok
       {:error, :precondition_failed} -> {:error, :already_up}
       {:error, reason} -> {:error, reason}
@@ -243,7 +245,8 @@ defmodule Couchdb.Ecto do
 
   @impl true
   def storage_down(config) do
-    case config |> server_from_config |> db_from_config(config) |> ICouch.delete_db do
+    db = config |> server_from_config |> db_from_config(config)
+    case db |> ICouch.delete_db do
       :ok -> :ok
       {:error, :not_found} -> {:error, :already_down}
       {:error, reason} -> {:error, reason}

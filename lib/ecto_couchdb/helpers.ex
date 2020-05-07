@@ -2,13 +2,9 @@ defmodule Couchdb.Ecto.Helpers do
 
   @spec server_from_config(config :: any()) :: ICouch.Server.t() | nil
   def server_from_config(config) do
-    case {config |> Keyword.get(:couchdb_url), config |> Keyword.get(:database)} do
-      {nil, _database} ->
-        nil
-      {_url, nil} ->
-        nil
-      {url, _database} ->
-        url |> ICouch.server_connection
+    case config |> Keyword.get(:couchdb_url) do
+      nil -> nil
+      url -> url |> ICouch.server_connection
     end
   end
 
@@ -19,8 +15,7 @@ defmodule Couchdb.Ecto.Helpers do
       body = %{name: user, password: password} |> Poison.encode!
       headers = [{"Content-Type", "application/json"}]
       {:ok, {resp_headers, _resp_body}} =
-        orig_server
-        |> ICouch.Server.send_raw_req("_session", :post, body, headers)
+        orig_server |> ICouch.Server.send_raw_req("_session", :post, body, headers)
       {_k, auth_session} = resp_headers |> Enum.find(fn {k, _v} ->
         k |> to_string |> String.match?(~r/^set-cookie$/i)
       end)
@@ -41,7 +36,9 @@ defmodule Couchdb.Ecto.Helpers do
 
   @spec db_from_config(server :: ICouch.Server.t(), config :: any()) :: ICouch.Db.t()
   def db_from_config(server, config) do
-    server |> ICouch.DB.new(config |> Keyword.get(:database))
+    db_name = config |> Keyword.get(:database)
+    prefix = config |> Keyword.get(:prefix)
+    db_with_prefix(server, db_name, prefix)
   end
 
   @spec db_from_repo(repo :: Ecto.Repo.t(), opts :: Keyword.t()) :: ICouch.Db.t()
@@ -76,8 +73,7 @@ defmodule Couchdb.Ecto.Helpers do
   def split_ddoc_view(schema, view_name), do: {type_from_schema(schema), view_name}
 
 
-  defp db_with_prefix(server, db_name, prefix) do
-    server |> ICouch.DB.new(db_name <> prefix)
-  end
+  defp db_with_prefix(server, db_name, nil), do: server |> ICouch.DB.new(db_name)
+  defp db_with_prefix(server, db_name, prefix), do: server |> ICouch.DB.new(db_name <> prefix)
 
 end

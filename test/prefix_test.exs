@@ -3,11 +3,6 @@ defmodule Couchdb.Ecto.PrefixTest do
   alias Couchdb.Ecto.{Helpers, Fetchers}
 
 
-  setup do
-    clear_db!()
-    :ok
-  end
-
   describe "schema operations" do
 
     setup do

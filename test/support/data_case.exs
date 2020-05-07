@@ -11,24 +11,25 @@ defmodule Couchdb.Ecto.DataCase do
 
 
       def clear_db!(prefix \\ nil) do
-        server = @repo |> server_from_repo
-        db = @repo |> db_from_repo(prefix: prefix)
-        do_clear_db!(server, db, 0)
+        config = @repo.config |> Keyword.put(:prefix, prefix)
+        drop_db!(config)
+        create_db!(config)
       end
-      defp do_clear_db!(server, db, stack_size) do
-        if stack_size > 3 do
-          raise "Could not clear db!"
-        end
-        case server |> ICouch.delete_db(db.name) do
-          {:error, :not_found} -> :ok
+      defp drop_db!(config, retries \\ 0) do
+        if retries > 3, do: raise "Could not drop db!"
+        case Couchdb.Ecto.storage_down(config) do
           :ok -> :ok
-          _error -> do_clear_db!(server, db, stack_size + 1)
+          {:error, :already_down} -> :ok
+          _other -> drop_db!(config, retries + 1)
         end
-        case server |> ICouch.create_db(db.name) do
-          {:ok, _db} -> :ok
-          _error -> do_clear_db!(server, db, stack_size + 1)
+      end
+      defp create_db!(config, retries \\ 0) do
+        if retries > 3, do: raise "Could not create db!"
+        case Couchdb.Ecto.storage_up(config) do
+          :ok -> :ok
+          {:error, :already_up} -> :ok
+          _other -> create_db!(config, retries + 1)
         end
-        :ok
       end
 
       def create_views!(design_docs, opts \\ []) do
