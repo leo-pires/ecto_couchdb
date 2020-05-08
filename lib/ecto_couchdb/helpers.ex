@@ -38,7 +38,9 @@ defmodule Couchdb.Ecto.Helpers do
   def db_from_config(server, config) do
     db_name = config |> Keyword.get(:database)
     prefix = config |> Keyword.get(:prefix)
-    db_with_prefix(server, db_name, prefix)
+    if db_name do
+      db_with_prefix(server, db_name, prefix)
+    end
   end
 
   @spec db_from_repo(repo :: Ecto.Repo.t(), opts :: Keyword.t()) :: ICouch.Db.t()
@@ -74,6 +76,6 @@ defmodule Couchdb.Ecto.Helpers do
 
 
   defp db_with_prefix(server, db_name, nil), do: server |> ICouch.DB.new(db_name)
-  defp db_with_prefix(server, db_name, prefix), do: server |> ICouch.DB.new(db_name <> prefix)
+  defp db_with_prefix(server, db_name, prefix), do: server |> ICouch.DB.new(prefix <> db_name)
 
 end
