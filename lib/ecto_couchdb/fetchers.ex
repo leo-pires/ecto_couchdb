@@ -161,11 +161,14 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
   defp coerce_search_response(%{"rows" => raw_rows, "bookmark" => bookmark, "total_rows" => total_rows}) do
-    raw_rows |> Enum.reduce_while([], fn %{"doc" => raw_doc}, acc ->
-      case ICouch.Document.from_api(raw_doc) do
-        {:ok, doc} -> {:cont, [doc | acc]}
-        :error -> {:halt, {:error, :could_not_parse_docs}}
-      end
+    raw_rows |> Enum.reduce_while([], fn
+      %{"doc" => raw_doc}, acc ->
+        case ICouch.Document.from_api(raw_doc) do
+          {:ok, doc} -> {:cont, [doc | acc]}
+          :error -> {:halt, {:error, :could_not_parse_docs}}
+        end
+      raw_doc, acc ->
+        {:cont, [raw_doc | acc]}
     end)
     |> case do
       docs when is_list(docs) ->
