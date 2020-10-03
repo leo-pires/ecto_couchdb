@@ -64,6 +64,14 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert many_fetched2 == fetched2
     end
 
+    test "get_many with missing value" do
+      post1_id = "id1"
+      assert {:ok, [many_fetched1, many_fetched2]} = Fetchers.get_many(TestRepo, Post, [post1_id, "foo"])
+      assert {:ok, fetched1} = Fetchers.get(TestRepo, Post, post1_id)
+      assert many_fetched1 == fetched1
+      assert many_fetched2 == nil
+    end
+
   end
 
   describe "one and all" do

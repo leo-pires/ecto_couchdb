@@ -59,6 +59,10 @@ defmodule Couchdb.Ecto.ResultProcessor do
   defp process_row(%{"key" => key, "value" => value}, payload) do
     row_result(key, value, payload)
   end
+  defp process_row(%{"error" => "not_found"}, _payload) do
+    # returns nil for get_many
+    nil
+  end
   # TODO: refactor return_keys to mimics db return
   defp row_result(key, returning, %{return_keys: true}), do: {key, returning}
   defp row_result(_key, returning, %{return_keys: false}), do: returning

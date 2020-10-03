@@ -3,7 +3,6 @@ defmodule Couchdb.Ecto.Fetchers do
   alias Couchdb.Ecto.ResultProcessor
 
   @type schema_map_fun() :: Ecto.Schema.t() | :raw | (ICouch.Document.t() -> Ecto.Schema.t())
-  @type docs_ids_revs() :: [String.t | {String.t, String.t} | {String.t, String.t, String.t} | map()]
   @type ddoc_view() :: {String.t(), String.t()} | String.t()
   @type all_options() :: Keyword.t()
   @type fetch_options() :: Keyword.t()
@@ -33,26 +32,26 @@ defmodule Couchdb.Ecto.Fetchers do
   def get(repo, schema_map, doc_id, opts) do
     {prefix, fetch_opts, processor_opts} = split_opts(opts)
     case repo |> db_from_repo(prefix: prefix) |> ICouch.open_doc(doc_id, fetch_opts) do
-      {:ok, doc} -> {:ok, ResultProcessor.process_result(:get, doc, repo, schema_map, processor_opts)}
-      {:error, :not_found} -> {:ok, nil}
-      {:error, reason} -> {:error, reason}
+      {:ok, doc} ->
+        {:ok, ResultProcessor.process_result(:get, doc, repo, schema_map, processor_opts)}
+      {:error, :not_found} ->
+        {:ok, nil}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
-  @spec get_many(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), docs_ids_revs :: docs_ids_revs(), opts :: all_options()) :: {:ok, list(doc_result() | nil)} | {:error, any()}
-  def get_many(repo, schema_map, docs_ids_revs, opts \\ []) do
-    {prefix, fetch_opts, processor_opts} = split_opts(opts)
-    case repo |> db_from_repo(prefix: prefix) |> ICouch.open_docs(docs_ids_revs, fetch_opts) do
-      {:ok, doc} -> {:ok, ResultProcessor.process_result(:get_many, doc, repo, schema_map, processor_opts)}
-      {:error, reason} -> {:error, reason}
-    end
+  @spec get_many(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), docs_ids_revs :: [String.t()], opts :: all_options()) :: {:ok, list(doc_result() | nil)} | {:error, any()}
+  def get_many(repo, schema_map, docs_ids, opts \\ []) do
+    all_opts = opts |> Keyword.drop([:keys, "keys"]) |> Keyword.merge([keys: docs_ids, include_docs: true])
+    all(repo, schema_map, {nil, "_all_docs"}, all_opts)
   end
 
   @spec one(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, doc_result() | nil} | {:error, :view_not_found | :too_many_results | any()}
   def one(repo, schema_map, ddoc_view, opts \\ []) do
     case all(repo, schema_map, ddoc_view, opts) do
       {:ok, []} -> {:ok, nil}
-      {:ok, [data]} -> {:ok, data}
+      {:ok, [doc]} -> {:ok, doc}
       {:ok, _} -> {:error, :too_many_results}
       {:error, reason} -> {:error, reason}
     end
@@ -63,9 +62,12 @@ defmodule Couchdb.Ecto.Fetchers do
     {prefix, fetch_opts, processor_opts} = split_opts(opts)
     {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
     case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
-      {:ok, view} -> {:ok, ResultProcessor.process_result(:all, view, repo, schema_map, processor_opts)}
-      {:error, :not_found} -> raise "Design doc/view #{ddoc}/#{view_name} not found!"
-      {:error, reason} -> {:error, reason}
+      {:ok, docs} ->
+        {:ok, ResultProcessor.process_result(:all, docs, repo, schema_map, processor_opts)}
+      {:error, :not_found} ->
+        raise "Design doc/view #{ddoc}/#{view_name} not found!"
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -73,17 +75,19 @@ defmodule Couchdb.Ecto.Fetchers do
   def multiple_all(repo, schema_map, ddoc_view, queries, opts \\ []) do
     {prefix, _, processor_opts} = split_opts(opts)
     {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
-    url = "_design/#{ddoc}/_view/#{view_name}/queries"
-    body = %{queries: queries}
-    with {:ok, response} <- repo |> db_from_repo(prefix: prefix) |> ICouch.DB.send_req(url, :post, body),
-         {:ok, result} <- coerce_multiple_all_response(response)
-    do
-      {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema_map, processor_opts)}
-    else
-      {:error, reason} -> {:error, reason}
+    case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name) |> fetch_multiple_all(queries) do
+      {:ok, result} ->
+        {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema_map, processor_opts)}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
-  defp coerce_multiple_all_response(%{"results" => raw_results}) do
+  defp fetch_multiple_all(%{db: db, ddoc: ddoc, name: view_name}, queries) do
+    url = "_design/#{ddoc}/_view/#{view_name}/queries"
+    body = %{"queries" => queries}
+    db |> ICouch.DB.send_req(url, :post, body) |> coerce_multiple_all_response
+  end
+  defp coerce_multiple_all_response({:ok, %{"results" => raw_results}}) do
     raw_results |> Enum.reduce_while([], fn %{"rows" => raw_rows} = raw_result, results_acc ->
       raw_rows |> Enum.reduce_while([], fn
         %{"doc" => raw_doc} = raw_row, rows_acc ->
@@ -112,20 +116,23 @@ defmodule Couchdb.Ecto.Fetchers do
       error -> error
     end
   end
+  defp coerce_multiple_all_response({:error, reason}), do: {:error, reason}
 
   @spec find(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), opts :: all_options()) :: {:ok, find_result()} | {:error, any()}
   def find(repo, schema_map, opts) do
     {prefix, query, processor_opts} = split_opts(opts)
-    query_as_map = query |> Enum.into(%{})
-    with {:ok, response} <- repo |> db_from_repo(prefix: prefix) |> ICouch.DB.send_req("_find", :post, query_as_map),
-         {:ok, result} <- coerce_find_response(response)
-    do
-      {:ok, ResultProcessor.process_result(:find, result, repo, schema_map, processor_opts)}
-    else
-      {:error, reason} -> {:error, reason}
+    case repo |> db_from_repo(prefix: prefix) |> fetch_find(query) do
+      {:ok, result} ->
+        {:ok, ResultProcessor.process_result(:find, result, repo, schema_map, processor_opts)}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
-  defp coerce_find_response(%{"docs" => raw_docs, "bookmark" => bookmark} = response) do
+  defp fetch_find(db, query) do
+    query_as_map = query |> Enum.into(%{})
+    db |> ICouch.DB.send_req("_find", :post, query_as_map) |> coerce_find_response
+  end
+  defp coerce_find_response({:ok, %{"docs" => raw_docs, "bookmark" => bookmark} = response}) do
     raw_docs |> Enum.reduce_while([], fn raw_doc, acc ->
       case ICouch.Document.from_api(raw_doc) do
         {:ok, doc} -> {:cont, [doc | acc]}
@@ -145,22 +152,25 @@ defmodule Couchdb.Ecto.Fetchers do
         error
     end
   end
+  defp coerce_find_response({:error, reason}), do: {:error, reason}
 
   @spec search(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, search_result()} | {:error, any()}
   def search(repo, schema_map, ddoc_view, opts \\ []) do
     {prefix, query, processor_opts} = split_opts(opts)
-    query_as_map = query |> Enum.into(%{})
     {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
-    search_endpoint = "_design/#{ddoc}/_search/#{view_name}"
-    with {:ok, response} <- repo |> db_from_repo(prefix: prefix) |> ICouch.DB.send_req(search_endpoint, :post, query_as_map),
-         {:ok, result} <- coerce_search_response(response)
-    do
-      {:ok, ResultProcessor.process_result(:search, result, repo, schema_map, processor_opts)}
-    else
-      {:error, reason} -> {:error, reason}
+    case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name) |> fetch_search(query) do
+      {:ok, result} ->
+        {:ok, ResultProcessor.process_result(:search, result, repo, schema_map, processor_opts)}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
-  defp coerce_search_response(%{"rows" => raw_rows, "bookmark" => bookmark, "total_rows" => total_rows}) do
+  defp fetch_search(%{db: db, ddoc: ddoc, name: view_name}, query) do
+    query_as_map = query |> Enum.into(%{})
+    search_endpoint = "_design/#{ddoc}/_search/#{view_name}"
+    db |> ICouch.DB.send_req(search_endpoint, :post, query_as_map) |> coerce_search_response
+  end
+  defp coerce_search_response({:ok, %{"rows" => raw_rows, "bookmark" => bookmark, "total_rows" => total_rows}}) do
     raw_rows |> Enum.reduce_while([], fn
       %{"doc" => raw_doc}, acc ->
         case ICouch.Document.from_api(raw_doc) do
@@ -178,5 +188,6 @@ defmodule Couchdb.Ecto.Fetchers do
         error
     end
   end
+  defp coerce_search_response({:error, reason}), do: {:error, reason}
 
 end
