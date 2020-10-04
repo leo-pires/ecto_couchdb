@@ -65,7 +65,7 @@ defmodule Couchdb.Ecto.Fetchers do
       {:ok, docs} ->
         {:ok, ResultProcessor.process_result(:all, docs, repo, schema_or_map, processor_opts)}
       {:error, :not_found} ->
-        raise "Design doc/view #{ddoc}/#{view_name} not found!"
+        {:error, :view_not_found}
       {:error, reason} ->
         {:error, reason}
     end
@@ -78,6 +78,8 @@ defmodule Couchdb.Ecto.Fetchers do
     case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name) |> fetch_multiple_all(queries) do
       {:ok, result} ->
         {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema_or_map, processor_opts)}
+      {:error, :not_found} ->
+        {:error, :view_not_found}
       {:error, reason} ->
         {:error, reason}
     end

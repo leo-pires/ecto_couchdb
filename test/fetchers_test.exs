@@ -162,13 +162,9 @@ defmodule Couchdb.Ecto.FetchersTest do
       assert list == [{nil, 4}]
     end
 
-    test "returns error if invalid view name" do
-      assert_raise RuntimeError, fn ->
-        Fetchers.one(TestRepo, Post, :xpto)
-      end
-      assert_raise RuntimeError, fn ->
-        Fetchers.all(TestRepo, Post, :xpto)
-      end
+    test "returns :view_not_found if invalid view name" do
+      {:error, :view_not_found} = Fetchers.one(TestRepo, Post, :xpto)
+      {:error, :view_not_found} = Fetchers.all(TestRepo, Post, :xpto)
     end
 
   end
@@ -227,6 +223,10 @@ defmodule Couchdb.Ecto.FetchersTest do
     test "multiple_all with return_keys" do
       {:ok, list} = Fetchers.multiple_all(TestRepo, User, :counts, [%{group_level: 0}], [return_keys: true])
       assert list == [[{nil, 6}]]
+    end
+
+    test "returns :view_not_found if invalid view name" do
+      {:error, :view_not_found} = Fetchers.multiple_all(TestRepo, User, :xpto, [])
     end
 
   end
