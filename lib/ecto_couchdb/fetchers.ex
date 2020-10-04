@@ -22,18 +22,18 @@ defmodule Couchdb.Ecto.Fetchers do
     {prefix, fetch_opts, processor_opts}
   end
 
-  @spec get(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), doc_id :: String.t(), opts :: all_options()) :: {:ok, doc_result() | nil} | {:error, :missing_id | any()}
-  def get(repo, schema_map, doc_id) do
-    get(repo, schema_map, doc_id, [])
+  @spec get(repo :: Ecto.Repo.t(), schema_or_map :: schema_map_fun(), doc_id :: String.t(), opts :: all_options()) :: {:ok, doc_result() | nil} | {:error, :missing_id | any()}
+  def get(repo, schema_or_map, doc_id) do
+    get(repo, schema_or_map, doc_id, [])
   end
-  def get(_repo, _schema_map, nil, _opts) do
+  def get(_repo, _schema_or_map, nil, _opts) do
     {:error, :missing_id}
   end
-  def get(repo, schema_map, doc_id, opts) do
+  def get(repo, schema_or_map, doc_id, opts) do
     {prefix, fetch_opts, processor_opts} = split_opts(opts)
     case repo |> db_from_repo(prefix: prefix) |> ICouch.open_doc(doc_id, fetch_opts) do
       {:ok, doc} ->
-        {:ok, ResultProcessor.process_result(:get, doc, repo, schema_map, processor_opts)}
+        {:ok, ResultProcessor.process_result(:get, doc, repo, schema_or_map, processor_opts)}
       {:error, :not_found} ->
         {:ok, nil}
       {:error, reason} ->
@@ -41,15 +41,15 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec get_many(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), docs_ids_revs :: [String.t()], opts :: all_options()) :: {:ok, list(doc_result() | nil)} | {:error, any()}
-  def get_many(repo, schema_map, docs_ids, opts \\ []) do
+  @spec get_many(repo :: Ecto.Repo.t(), schema_or_map :: schema_map_fun(), docs_ids :: [String.t()], opts :: all_options()) :: {:ok, list(doc_result())} | {:error, any()}
+  def get_many(repo, schema_or_map, docs_ids, opts \\ []) do
     all_opts = opts |> Keyword.drop([:keys, "keys"]) |> Keyword.merge([keys: docs_ids, include_docs: true])
-    all(repo, schema_map, {nil, "_all_docs"}, all_opts)
+    all(repo, schema_or_map, {nil, "_all_docs"}, all_opts)
   end
 
-  @spec one(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, doc_result() | nil} | {:error, :view_not_found | :too_many_results | any()}
-  def one(repo, schema_map, ddoc_view, opts \\ []) do
-    case all(repo, schema_map, ddoc_view, opts) do
+  @spec one(repo :: Ecto.Repo.t(), schema_or_map :: schema_map_fun(), ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, doc_result() | nil} | {:error, :view_not_found | :too_many_results | any()}
+  def one(repo, schema_or_map, ddoc_view, opts \\ []) do
+    case all(repo, schema_or_map, ddoc_view, opts) do
       {:ok, []} -> {:ok, nil}
       {:ok, [doc]} -> {:ok, doc}
       {:ok, _} -> {:error, :too_many_results}
@@ -57,13 +57,13 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec all(repo :: Ecto.Repo.t, schema_map :: schema_map_fun, ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, list(doc_result())} | {:error, :view_not_found | any()}
-  def all(repo, schema_map, ddoc_view, opts \\ []) do
+  @spec all(repo :: Ecto.Repo.t, schema_or_map :: schema_map_fun, ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, list(doc_result())} | {:error, :view_not_found | any()}
+  def all(repo, schema_or_map, ddoc_view, opts \\ []) do
     {prefix, fetch_opts, processor_opts} = split_opts(opts)
-    {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
+    {ddoc, view_name} = split_ddoc_view(schema_or_map, ddoc_view)
     case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name, fetch_opts) |> ICouch.View.fetch do
       {:ok, docs} ->
-        {:ok, ResultProcessor.process_result(:all, docs, repo, schema_map, processor_opts)}
+        {:ok, ResultProcessor.process_result(:all, docs, repo, schema_or_map, processor_opts)}
       {:error, :not_found} ->
         raise "Design doc/view #{ddoc}/#{view_name} not found!"
       {:error, reason} ->
@@ -71,13 +71,13 @@ defmodule Couchdb.Ecto.Fetchers do
     end
   end
 
-  @spec multiple_all(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), queries :: map(), opts :: all_options()) :: {:ok, list(list(doc_result()))} | {:error, any()}
-  def multiple_all(repo, schema_map, ddoc_view, queries, opts \\ []) do
+  @spec multiple_all(repo :: Ecto.Repo.t(), schema_or_map :: schema_map_fun(), ddoc_view :: ddoc_view(), queries :: map(), opts :: all_options()) :: {:ok, list(list(doc_result()))} | {:error, any()}
+  def multiple_all(repo, schema_or_map, ddoc_view, queries, opts \\ []) do
     {prefix, _, processor_opts} = split_opts(opts)
-    {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
+    {ddoc, view_name} = split_ddoc_view(schema_or_map, ddoc_view)
     case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name) |> fetch_multiple_all(queries) do
       {:ok, result} ->
-        {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema_map, processor_opts)}
+        {:ok, ResultProcessor.process_result(:multiple_all, result, repo, schema_or_map, processor_opts)}
       {:error, reason} ->
         {:error, reason}
     end
@@ -118,12 +118,12 @@ defmodule Couchdb.Ecto.Fetchers do
   end
   defp coerce_multiple_all_response({:error, reason}), do: {:error, reason}
 
-  @spec find(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), opts :: all_options()) :: {:ok, find_result()} | {:error, any()}
-  def find(repo, schema_map, opts) do
+  @spec find(repo :: Ecto.Repo.t(), schema_or_map :: schema_map_fun(), opts :: all_options()) :: {:ok, find_result()} | {:error, any()}
+  def find(repo, schema_or_map, opts) do
     {prefix, query, processor_opts} = split_opts(opts)
     case repo |> db_from_repo(prefix: prefix) |> fetch_find(query) do
       {:ok, result} ->
-        {:ok, ResultProcessor.process_result(:find, result, repo, schema_map, processor_opts)}
+        {:ok, ResultProcessor.process_result(:find, result, repo, schema_or_map, processor_opts)}
       {:error, reason} ->
         {:error, reason}
     end
@@ -154,13 +154,13 @@ defmodule Couchdb.Ecto.Fetchers do
   end
   defp coerce_find_response({:error, reason}), do: {:error, reason}
 
-  @spec search(repo :: Ecto.Repo.t(), schema_map :: schema_map_fun(), ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, search_result()} | {:error, any()}
-  def search(repo, schema_map, ddoc_view, opts \\ []) do
+  @spec search(repo :: Ecto.Repo.t(), schema_or_map :: schema_map_fun(), ddoc_view :: ddoc_view(), opts :: all_options()) :: {:ok, search_result()} | {:error, any()}
+  def search(repo, schema_or_map, ddoc_view, opts \\ []) do
     {prefix, query, processor_opts} = split_opts(opts)
-    {ddoc, view_name} = split_ddoc_view(schema_map, ddoc_view)
+    {ddoc, view_name} = split_ddoc_view(schema_or_map, ddoc_view)
     case repo |> db_from_repo(prefix: prefix) |> view_from_db(ddoc, view_name) |> fetch_search(query) do
       {:ok, result} ->
-        {:ok, ResultProcessor.process_result(:search, result, repo, schema_map, processor_opts)}
+        {:ok, ResultProcessor.process_result(:search, result, repo, schema_or_map, processor_opts)}
       {:error, reason} ->
         {:error, reason}
     end

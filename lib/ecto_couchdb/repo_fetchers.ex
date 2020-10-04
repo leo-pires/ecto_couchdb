@@ -16,10 +16,18 @@ defmodule Couchdb.Ecto.RepoFetchers do
 
       @spec get!(schema_map :: Fetchers.schema_map_fun(), doc_id :: String.t(), opts :: Fetchers.all_options()) :: Fetchers.doc_result()
       def get!(schema_or_map, doc_id, opts \\ []) do
-        case Couchdb.Ecto.Fetchers.get(__MODULE__, schema_or_map, doc_id, opts) do
+        case get(schema_or_map, doc_id, opts) do
           {:ok, nil} -> raise Ecto.NoResultsError
           {:ok, data} -> data
           {:error, reason} -> raise "Unknown error #{reason}"
+        end
+      end
+
+      @spec get_many(schema_map :: Fetchers.schema_map_fun(), docs_ids :: [String.t()], opts :: Fetchers.all_options()) :: {:ok, list(Fetchers.doc_result())} | {:error, any()}
+      def get_many(schema_or_map, docs_ids, opts \\ []) do
+        case Couchdb.Ecto.Fetchers.get_many(__MODULE__, schema_or_map, docs_ids, opts) do
+          {:ok, data} -> data
+          {:error, reason} -> {:error, reason}
         end
       end
 
@@ -34,7 +42,7 @@ defmodule Couchdb.Ecto.RepoFetchers do
 
       @spec one!(schema_map :: Fetchers.schema_map_fun(), ddoc_view :: Fetchers.ddoc_view(), opts :: Fetchers.all_options()) :: Fetchers.doc_result()
       def one!(schema_or_map, ddoc_view, opts \\ []) do
-        case Couchdb.Ecto.Fetchers.one(__MODULE__, schema_or_map, ddoc_view, opts) do
+        case one(schema_or_map, ddoc_view, opts) do
           {:ok, nil} -> raise Ecto.NoResultsError
           {:ok, data} -> data
           {:error, :too_many_results} -> raise Ecto.MultipleResultsError
