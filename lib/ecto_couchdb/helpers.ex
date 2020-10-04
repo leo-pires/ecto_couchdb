@@ -1,5 +1,8 @@
 defmodule Couchdb.Ecto.Helpers do
 
+  @spec ddoc_doc_id(ddoc :: String.t()) :: String.t()
+  def ddoc_doc_id(ddoc), do: "_design/#{ddoc}"
+
   @spec server_from_config(config :: any()) :: ICouch.Server.t() | nil
   def server_from_config(config) do
     case config |> Keyword.get(:couchdb_url) do

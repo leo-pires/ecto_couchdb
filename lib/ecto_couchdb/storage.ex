@@ -46,6 +46,4 @@ defmodule Couchdb.Ecto.Storage do
     end
   end
 
-  def ddoc_doc_id(ddoc), do: "_design/#{ddoc}"
-
 end
