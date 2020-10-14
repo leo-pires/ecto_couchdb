@@ -2,7 +2,7 @@ defmodule Couchdb.Ecto.Attachment do
   @behaviour Ecto.Type
 
   @enforce_keys [:content_type, :data]
-  defstruct [:content_type, :data, :revpos]
+  defstruct [:content_type, :data]
 
 
   @impl true
@@ -36,8 +36,8 @@ defmodule Couchdb.Ecto.Attachment do
   end
 
   @impl true
-  def load(%{content_type: content_type, data: data, revpos: revpos}) do
-    %__MODULE__{content_type: content_type, data: data, revpos: revpos} |> do_load
+  def load(%{content_type: content_type, data: data}) do
+    %__MODULE__{content_type: content_type, data: data} |> do_load
   end
   defp do_load(%__MODULE__{content_type: "application/json", data: data} = attachment) when not is_nil(data) do
     case Poison.decode(data) do

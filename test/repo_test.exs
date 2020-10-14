@@ -443,7 +443,6 @@ defmodule Couchdb.Ecto.RepoTest do
       attachment1 = %{content_type: "application/json", data: %{foo: "goo"}}
       {:ok, ai} = TestAttachment.changeset(%TestAttachment{}, %{title: "foogoo", example_attachment: attachment1}) |> TestRepo.insert
       assert ai.example_attachment.data == %{foo: "goo"}
-      # revpos
       {:ok, aif1} = Fetchers.get(TestRepo, TestAttachment, ai._id, attachments: true)
       {:ok, aif2} = Fetchers.get(TestRepo, TestAttachment, ai._id)
       assert aif1._id == ai._id
@@ -458,13 +457,11 @@ defmodule Couchdb.Ecto.RepoTest do
       {:ok, au} = TestAttachment.changeset(ai, %{example_attachment: attachment2}) |> TestRepo.update
       assert au._id == ai._id
       assert au._rev > ai._rev
-      # revpos
       assert au.example_attachment.data == %{bar: "baz"}
       {:ok, auf1} = Fetchers.get(TestRepo, TestAttachment, au._id, attachments: true)
       assert auf1._id == au._id
       assert auf1._rev == au._rev
       assert %Attachment{content_type: "application/json", data: %{"bar" => "baz"}} = auf1.example_attachment
-      assert auf1.example_attachment.revpos > aif1.example_attachment.revpos
     end
 
     test "preserve attachment if stub on update" do
@@ -477,7 +474,6 @@ defmodule Couchdb.Ecto.RepoTest do
       assert au._id == ai._id
       assert au._rev > ai._rev
       assert au.title == "bar"
-      # revpos
       {:ok, auf} = Fetchers.get(TestRepo, TestAttachment, ai._id, attachments: true)
       assert au._id == ai._id
       assert au._rev > ai._rev
@@ -485,7 +481,6 @@ defmodule Couchdb.Ecto.RepoTest do
       assert auf._rev == au._rev
       assert auf.title == au.title
       assert %Attachment{content_type: "application/json", data: %{"foo" => "goo"}} = auf.example_attachment
-      assert auf.example_attachment.revpos == aif.example_attachment.revpos
     end
 
     test "remove attachment if nil on update" do
@@ -498,7 +493,6 @@ defmodule Couchdb.Ecto.RepoTest do
       assert au._id == ai._id
       assert au._rev > ai._rev
       assert au.title == "bar"
-      # revpos
       {:ok, auf} = Fetchers.get(TestRepo, TestAttachment, ai._id, attachments: true)
       assert au._id == ai._id
       assert au._rev > ai._rev
@@ -549,11 +543,9 @@ defmodule Couchdb.Ecto.RepoTest do
       assert fetch_one2._id == ai._id
       assert fetch_one2._rev == ai._rev
       assert %Attachment{content_type: "application/json", data: %{"foo" => "goo"}} = fetch_one2.example_attachment
-      assert fetch_one2.example_attachment.revpos == 1
       assert fetch_all2._id == ai._id
       assert fetch_all2._rev == ai._rev
       assert %Attachment{content_type: "application/json", data: %{"foo" => "goo"}} = fetch_one2.example_attachment
-      assert fetch_all2.example_attachment.revpos == 1
       # with_doc
       {:ok, fetch_one3} = TestRepo |> Fetchers.one(TestAttachment, :all_with_doc, key: ai._id, include_docs: true, attachments: true)
       {:ok, fetch_all3} = TestRepo |> Fetchers.all(TestAttachment, :all_with_doc, include_docs: true, attachments: true)
@@ -579,8 +571,8 @@ defmodule Couchdb.Ecto.RepoTest do
     end
 
     test "load" do
-      assert {:ok, %Attachment{content_type: "application/json", data: %{"foo" => "goo"}, revpos: 1}} == Attachment.load(%{content_type: "application/json", data: "{\"foo\":\"goo\"}", revpos: 1})
-      assert {:ok, %Attachment{content_type: "application/json", data: nil, revpos: 1}} == Attachment.load(%{content_type: "application/json", data: nil, revpos: 1})
+      assert {:ok, %Attachment{content_type: "application/json", data: %{"foo" => "goo"}}} == Attachment.load(%{content_type: "application/json", data: "{\"foo\":\"goo\"}"})
+      assert {:ok, %Attachment{content_type: "application/json", data: nil}} == Attachment.load(%{content_type: "application/json", data: nil})
     end
 
   end
