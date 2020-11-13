@@ -10,15 +10,30 @@ defmodule Couchdb.Ecto do
   # Adapter behaviour
   ###
 
+  def child_spec(config) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [config]}
+    }
+  end
+
+  def start_link(_config) do
+    Supervisor.start_link([], strategy: :one_for_one)
+  end
+
   @impl true
   defmacro __before_compile__(_env), do: :ok
 
   @impl true
-  def ensure_all_started(_repo, _type), do: {:ok, [:icouch]}
+  def ensure_all_started(_repo, _type) do
+    {:ok, _} = Application.ensure_all_started(:ibrowse)
+    {:ok, _} = Application.ensure_all_started(:icouch)
+    {:ok, [:ibrowse, :icouch]}
+  end
 
   @impl true
   def init(config) do
-    child_spec = Supervisor.Spec.supervisor(Supervisor, [[], [strategy: :one_for_one]])
+    child_spec = Supervisor.child_spec({__MODULE__, config}, [])
     server = server_from_config(config)
     db = server |> db_from_config(config)
     adapter_meta = %{server: server, db: db}
@@ -234,6 +249,7 @@ defmodule Couchdb.Ecto do
 
   @impl true
   def storage_up(config) do
+    ensure_all_started(config, :temporary)
     server = server_from_config(config)
     db = db_from_config(server, config)
     case server |> ICouch.create_db(db.name) do
@@ -245,6 +261,7 @@ defmodule Couchdb.Ecto do
 
   @impl true
   def storage_down(config) do
+    ensure_all_started(config, :temporary)
     db = config |> server_from_config |> db_from_config(config)
     case db |> ICouch.delete_db do
       :ok -> :ok

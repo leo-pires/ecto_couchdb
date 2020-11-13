@@ -22,7 +22,7 @@ defmodule Couchdb.Ecto.Attachment do
 
   @impl true
   def dump(%__MODULE__{content_type: "application/json", data: data}) do
-    case Poison.encode(data) do
+    case Jason.encode(data) do
       {:ok, json} -> do_dump("application/json", json)
       {:error, _} -> :error
     end
@@ -40,7 +40,7 @@ defmodule Couchdb.Ecto.Attachment do
     %__MODULE__{content_type: content_type, data: data} |> do_load
   end
   defp do_load(%__MODULE__{content_type: "application/json", data: data} = attachment) when not is_nil(data) do
-    case Poison.decode(data) do
+    case Jason.decode(data) do
       {:ok, json} -> {:ok, Map.put(attachment, :data, json)}
       _error -> :error
     end

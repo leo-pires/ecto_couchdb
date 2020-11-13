@@ -15,7 +15,7 @@ defmodule Couchdb.Ecto.Helpers do
   def try_session(orig_server, url) do
     try do
       {user, password} = orig_server |> ICouch.Server.credentials
-      body = %{name: user, password: password} |> Poison.encode!
+      body = %{name: user, password: password} |> Jason.encode!
       headers = [{"Content-Type", "application/json"}]
       {:ok, {resp_headers, _resp_body}} =
         orig_server |> ICouch.Server.send_raw_req("_session", :post, body, headers)

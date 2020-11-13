@@ -19,11 +19,12 @@ defmodule CouchdbAdapter.Mixfile do
 
   defp deps do
     [
-      {:ecto, "~> 3.0"},
-      {:icouch, github: "leo-pires/icouch", branch: "develop"},
-      {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
-      {:coverex, "~> 1.5", only: :test},
+      {:ecto, "~> 3.5.5"},
+      {:icouch, github: "leo-pires/icouch", branch: "refactor/use_jason"},
+      {:ibrowse, "4.4.0"},
+      {:credo, "~> 1.5.1", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.0.0", only: [:dev, :test], runtime: false},
+      {:coverex, "~> 1.5.0", only: :test},
     ]
   end
 
