@@ -31,36 +31,28 @@ defmodule Couchdb.Ecto.Helpers do
     end
   end
 
-  @spec server_from_repo(repo :: Ecto.Repo.t()) :: ICouch.Server.t()
-  def server_from_repo(repo) do
-    {_repo, %{server: server}} = Ecto.Repo.Registry.lookup(repo)
-    server
-  end
-
   @spec db_from_config(server :: ICouch.Server.t(), config :: any()) :: ICouch.Db.t()
   def db_from_config(server, config) do
     db_name = config |> Keyword.get(:database)
     prefix = config |> Keyword.get(:prefix)
-    if db_name do
-      db_with_prefix(server, db_name, prefix)
-    end
+    db_with_prefix(server, db_name, prefix)
   end
 
   @spec db_from_repo(repo :: Ecto.Repo.t(), opts :: Keyword.t()) :: ICouch.Db.t()
   def db_from_repo(repo, opts \\ []) do
-    {_repo, %{server: server, db: db}} = Ecto.Repo.Registry.lookup(repo)
-    case opts |> Keyword.get(:prefix) do
-      nil -> db
-      prefix -> server |> db_with_prefix(db.name, prefix)
-    end
+    {_repo, %{server: server}} = Ecto.Repo.Registry.lookup(repo)
+    repo_config = repo.config
+    db_name = repo_config |> Keyword.get(:database)
+    prefix = Keyword.get(opts, :prefix) || Keyword.get(repo.config, :prefix)
+    db_with_prefix(server, db_name, prefix)
   end
 
   @spec db_from_meta(adapter_meta :: Ecto.Adapter.Schema.adapter_meta(), schema_meta :: Ecto.Adapter.Schema.schema_meta()) :: ICouch.Db.t()
-  def db_from_meta(%{db: db}, %{prefix: nil}) do
-    db
-  end
-  def db_from_meta(%{db: db, server: server}, %{prefix: prefix}) when is_binary(prefix) do
-    server |> db_with_prefix(db.name, prefix)
+  def db_from_meta(%{server: server, repo: repo}, %{prefix: schema_prefix}) do
+    repo_config = repo.config
+    db_name = repo_config |> Keyword.get(:database)
+    prefix = schema_prefix || Keyword.get(repo_config, :prefix)
+    db_with_prefix(server, db_name, prefix)
   end
 
   @spec view_from_db(db :: ICouch.DB.t(), ddoc :: String.t(), name :: String.t(), params :: map()) :: ICouch.View.t()
@@ -78,7 +70,6 @@ defmodule Couchdb.Ecto.Helpers do
   def split_ddoc_view(schema, view_name), do: {type_from_schema(schema), view_name}
 
 
-  defp db_with_prefix(server, db_name, nil), do: server |> ICouch.DB.new(db_name)
-  defp db_with_prefix(server, db_name, prefix), do: server |> ICouch.DB.new(prefix <> db_name)
+  defp db_with_prefix(server, db_name, prefix), do: server |> ICouch.DB.new("#{prefix}#{db_name}")
 
 end

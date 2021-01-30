@@ -35,8 +35,7 @@ defmodule Couchdb.Ecto do
   def init(config) do
     child_spec = Supervisor.child_spec({__MODULE__, config}, [])
     server = server_from_config(config)
-    db = server |> db_from_config(config)
-    adapter_meta = %{server: server, db: db}
+    adapter_meta = %{server: server}
     {:ok, child_spec, adapter_meta}
   end
 

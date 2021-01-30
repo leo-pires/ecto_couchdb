@@ -149,7 +149,6 @@ defmodule Couchdb.Ecto.DataCase do
   setup do
     %{
       repo: TestRepo,
-      server: TestRepo |> Couchdb.Ecto.Helpers.server_from_repo,
       db: TestRepo |> Couchdb.Ecto.Helpers.db_from_repo
     }
   end
